@@ -1,0 +1,16 @@
+build/
+dist/
+*.egg-info/
+docs/build/
+docs/source/cospar.*
+/**/.DS_Store
+/**/*.py[cod]
+/**/__pycache__
+.eggs/
+tests/output/
+.coverage*
+.pytest_cache
+/**/.ipynb_checkpoints
+/**/__MACOSX/
+docs/source/*cospar*/
+docs/source/test_data*
