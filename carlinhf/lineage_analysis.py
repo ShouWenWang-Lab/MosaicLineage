@@ -7,6 +7,7 @@ import cospar as cs
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
@@ -14,7 +15,7 @@ from scipy.io import loadmat
 rng = np.random.default_rng()
 
 
-def generate_adata(X_clone, state_info=None):
+def generate_adata_v0(X_clone, state_info=None):
     adata_orig = sc.AnnData(X_clone)
     adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
     adata_orig.obsm["X_clone"] = X_clone
@@ -28,7 +29,7 @@ def generate_adata(X_clone, state_info=None):
     return adata_orig
 
 
-def generate_adata_v1(df_data):
+def generate_adata(df_data):
     all_mutation = []
     for xx in df_data["allele"]:
         all_mutation += list(xx.split(","))
@@ -43,9 +44,10 @@ def generate_adata_v1(df_data):
             ]  # This keeps the count information, and works better
             # X_clone[i,idx]=1
 
-    adata_orig = sc.AnnData(X_clone)
+    adata_orig = sc.AnnData(ssp.csr_matrix(X_clone))
+    adata_orig.var_names = all_mutation
     adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
-    adata_orig.obsm["X_clone"] = X_clone
+    adata_orig.obsm["X_clone"] = ssp.csr_matrix(X_clone)
     adata_orig.uns["data_des"] = ["hi"]
     adata_orig.obs["allele"] = np.array(df_data["allele"])
     adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
