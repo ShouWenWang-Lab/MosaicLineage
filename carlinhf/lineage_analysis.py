@@ -77,6 +77,26 @@ def query_allele_frequencies(df_reference, df_target):
     return df_reference.merge(df_target, on="allele", how="right").fillna(0)
 
 
+def onehot(input_dict):
+    """
+    The input dict provides classification for all samples
+    It returns the corresponding onehot encoding for each sample
+    """
+    output_dict = {}
+    aval = set(input_dict.values())
+
+    mapping_dict = {}
+    for j, x in enumerate(aval):
+        mapping_dict[x] = j
+
+    for key, value in input_dict.items():
+        temp = np.zeros(len(aval))
+        temp[mapping_dict[value]] = 1
+        output_dict[key] = list(temp)
+
+    return output_dict
+
+
 def tree_reconstruction_error(
     parent_map, node_mapping, origin_score, weight_factor=1, plot=False
 ):
@@ -88,8 +108,10 @@ def tree_reconstruction_error(
 
     node_score = {}
     for key, value in node_mapping.items():
-        temp_scores = [origin_score[x.split("-")[0]] for x in value]
-        node_score[key] = np.mean(temp_scores) / weight_factor ** len(temp_scores)
+        temp_scores = [origin_score[x] for x in value]
+        node_score[key] = np.mean(temp_scores, axis=0) / weight_factor ** len(
+            temp_scores
+        )
 
     score_pairs = []
     child_nodes = []
@@ -104,15 +126,19 @@ def tree_reconstruction_error(
         temp_pair = [node_score[xx] for xx in df.loc[unique_parent]["child"].values]
         score_pairs.append(temp_pair)
     score_pairs = np.array(score_pairs)
+    score_pairs_flatten = [
+        score_pairs[:, 0, :].flatten(),
+        score_pairs[:, 1, :].flatten(),
+    ]
 
     if plot:
-        ax = sns.scatterplot(x=score_pairs[:, 0], y=score_pairs[:, 1])
+        ax = sns.scatterplot(x=score_pairs_flatten[0], y=score_pairs_flatten[1])
         ax.set_xlabel("Membership score for node a")
         ax.set_ylabel("Membership score for node b")
         ax.set_title(f"Decay factor={weight_factor:.2f}")
 
-    corr = np.corrcoef(score_pairs[:, 0], score_pairs[:, 1])[0, 1]
-    return corr, score_pairs
+    corr = np.corrcoef(score_pairs_flatten[0], score_pairs_flatten[1])[0, 1]
+    return corr, score_pairs_flatten
 
 
 def shuffle_matrix(matrix_0, run=10):
@@ -128,8 +154,9 @@ def shuffle_matrix(matrix_0, run=10):
 def evaluate_coupling_matrix(
     coupling, fate_names, origin_score, decay_factor=1, plot=False
 ):
+    print("Use updated pipeline")
     size = len(fate_names)
-    leaf_score = np.array([origin_score[xx.split("-")[0]] for xx in fate_names])
+    leaf_score = np.array([origin_score[xx] for xx in fate_names])
     weight_function = np.exp(-decay_factor * np.arange(size))
     map_score = np.zeros(size)
     coupling_1 = coupling.copy()
@@ -139,7 +166,10 @@ def evaluate_coupling_matrix(
         ] = 0  # reset the diagonal term to be 0 so that it will not contribute to the final score
         ref_score = leaf_score[i]
         idx = np.argsort(coupling_1[i])[::-1]
-        map_score[i] = np.sum(leaf_score[idx] * ref_score * weight_function)
+        temp = 0
+        for j, new_id in enumerate(idx):
+            temp += np.sum(leaf_score[new_id] * ref_score) * weight_function[j]
+        map_score[i] = temp
 
     if plot:
         ax = sns.histplot(x=map_score)
