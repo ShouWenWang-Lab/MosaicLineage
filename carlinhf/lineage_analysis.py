@@ -99,12 +99,12 @@ def onehot(input_dict):
     return output_dict
 
 
-def tree_reconstruction_error(
+def tree_reconstruction_accuracy(
     parent_map, node_mapping, origin_score, weight_factor=1, plot=False
 ):
     """
-    origin_score: 
-        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name. 
+    origin_score:
+        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name.
         We recommend to symmetric value like -1 and 1, instead of 0 and 1. Otherwise, our weighting scheme is not working
     """
 
