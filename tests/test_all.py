@@ -51,14 +51,30 @@ def test_all(shared_datadir):
 
     cell_N_temp = []
     clone_N_temp = []
+    mutation_N_temp = []
     for xx in set(adata_sub.obs["sample"]):
         cell_N_temp.append(np.sum(adata_sub.obs["sample"] == xx))
         clone_N_temp.append(
             len(set(adata_sub[adata_sub.obs["sample"] == xx].obs["allele"]))
         )
-    pd.DataFrame(
-        {"Sample": SampleList, "Cell number": cell_N_temp, "Clone number": clone_N_temp}
+        mutation_N_temp.append(
+            np.sum(
+                adata_sub[adata_sub.obs["sample"] == xx]
+                .obsm["X_clone"]
+                .sum(0)
+                .A.flatten()
+                > 0
+            )
+        )
+    df_info = pd.DataFrame(
+        {
+            "Sample": SampleList,
+            "Cell number": cell_N_temp,
+            "Clone number": clone_N_temp,
+            "mutation number": mutation_N_temp,
+        }
     )
+    df_info.to_csv(os.path.join(shared_datadir, "..", "output", "X_clone_info.csv"))
 
     adata_sub.obs["state_info"] = adata_sub.obs["sample"]
     adata_sub.uns["data_des"] = ["coarse"]

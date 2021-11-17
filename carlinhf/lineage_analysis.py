@@ -29,13 +29,12 @@ def generate_adata_v0(X_clone, state_info=None):
     return adata_orig
 
 
-def generate_adata(df_data):
+def generate_adata(df_data, use_np_array=False):
     all_mutation = []
     for xx in df_data["allele"]:
         all_mutation += list(xx.split(","))
     all_mutation = np.array(list(set(all_mutation)))
 
-    use_np_array = True
     if use_np_array:
         print("Use np.array")
         X_clone = np.zeros((len(df_data), len(all_mutation)))
