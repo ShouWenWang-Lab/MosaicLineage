@@ -35,22 +35,47 @@ def generate_adata(df_data):
         all_mutation += list(xx.split(","))
     all_mutation = np.array(list(set(all_mutation)))
 
-    X_clone = np.zeros((len(df_data), len(all_mutation)))
-    for i, xx in enumerate(df_data["allele"]):
-        for yy in list(xx.split(",")):
-            idx = np.nonzero(all_mutation == yy)[0]
-            X_clone[i, idx] = df_data.iloc[i][
-                "obs_UMI_count"
-            ]  # This keeps the count information, and works better
-            # X_clone[i,idx]=1
+    use_np_array = True
+    if use_np_array:
+        print("Use np.array")
+        X_clone = np.zeros((len(df_data), len(all_mutation)))
+        for i, xx in enumerate(df_data["allele"]):
+            for yy in list(xx.split(",")):
+                idx = np.nonzero(all_mutation == yy)[0]
+                X_clone[i, idx] = df_data.iloc[i][
+                    "obs_UMI_count"
+                ]  # This keeps the count information, and works better
+                # X_clone[i,idx]=1
+    else:
+        print("Use sparse matrix")
+        X_clone_row = []
+        X_clone_col = []
+        X_clone_val = []
+        for i, xx in enumerate(df_data["allele"]):
+            for yy in list(xx.split(",")):
+                idx = np.nonzero(all_mutation == yy)[0]
+                if len(idx) > 0:
+                    value_temp = np.array(
+                        df_data.iloc[i]["obs_UMI_count"]
+                    )  # or, value_temp=np.ones(len(idx))
+                    X_clone_row.append(i)
+                    X_clone_col.append(idx[0])
+                    X_clone_val.append(value_temp)
+                    # X_clone_COO += [(i, idx_j, value_temp[j]) for j, idx_j in enumerate(idx)]
+        X_clone = ssp.coo_matrix(
+            (X_clone_val, (X_clone_row, X_clone_col)),
+            shape=(len(df_data), len(all_mutation)),
+        )
 
-    adata_orig = sc.AnnData(ssp.csr_matrix(X_clone))
+    X_clone = ssp.csr_matrix(X_clone)
+    adata_orig = sc.AnnData(X_clone)
     adata_orig.var_names = all_mutation
     adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
-    adata_orig.obsm["X_clone"] = ssp.csr_matrix(X_clone)
+    adata_orig.obsm["X_clone"] = X_clone
     adata_orig.uns["data_des"] = ["hi"]
     adata_orig.obs["allele"] = np.array(df_data["allele"])
-    adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
+    if "expected_frequency" in df_data.keys():
+        adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
     adata_orig.obs["obs_UMI_count"] = np.array(df_data["obs_UMI_count"])
     adata_orig.obs["sample"] = np.array(df_data["sample"])
     adata_orig.obs["cell_id"] = [
@@ -59,11 +84,11 @@ def generate_adata(df_data):
     adata_orig.obs["mouse"] = np.array(df_data["mouse"])
     clone_idx = (X_clone > 0).sum(
         0
-    ) > 1  # select clones observed in more than one cells.
+    ).A.flatten() > 1  # select clones observed in more than one cells.
     adata_orig.uns["multicell_clones"] = clone_idx
     adata_orig.obs["cells_from_multicell_clone"] = (X_clone[:, clone_idx] > 0).sum(
         1
-    ) > 0
+    ).A.flatten() > 0
     adata_orig.var_names = all_mutation
     return adata_orig
 
