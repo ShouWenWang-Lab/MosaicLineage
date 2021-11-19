@@ -83,7 +83,6 @@ def test_all(shared_datadir):
     )
     cs.pl.barcode_heatmap(
         adata_sub,
-        selected_times="0",
         color_bar=True,
         fig_height=10,
         fig_width=10,
@@ -94,6 +93,14 @@ def test_all(shared_datadir):
 
     cs.tl.fate_hierarchy(adata_sub, source="X_clone")
     cs.pl.fate_hierarchy(adata_sub, source="X_clone")
+    my_tree_coarse = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
+    hf.visualize_tree(
+        my_tree_coarse,
+        color_coding=None,
+        mode="r",
+        data_des="coarse",
+        figure_path=cs.settings.data_path,
+    )
 
     input_dict = {
         "LL607-MPP3-4": 1,
@@ -114,7 +121,7 @@ def test_all(shared_datadir):
     )
     print(f"Tree reconstruction accuracy: {corr}")
 
-    cs.tl.fate_coupling(adata_sub, selected_times="0", source="X_clone", method="SW")
+    cs.tl.fate_coupling(adata_sub, source="X_clone", method="SW")
     cs.pl.fate_coupling(adata_sub, source="X_clone")
     X_coupling = adata_sub.uns["fate_coupling_X_clone"]["X_coupling"]
     fate_names = adata_sub.uns["fate_coupling_X_clone"]["fate_names"]

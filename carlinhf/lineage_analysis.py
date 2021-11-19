@@ -29,7 +29,7 @@ def generate_adata_v0(X_clone, state_info=None):
     return adata_orig
 
 
-def generate_adata(df_data, use_np_array=False):
+def generate_adata(df_data, use_np_array=False, use_UMI=True):
     all_mutation = []
     for xx in df_data["allele"]:
         all_mutation += list(xx.split(","))
@@ -54,9 +54,12 @@ def generate_adata(df_data, use_np_array=False):
             for yy in list(xx.split(",")):
                 idx = np.nonzero(all_mutation == yy)[0]
                 if len(idx) > 0:
-                    value_temp = np.array(
-                        df_data.iloc[i]["obs_UMI_count"]
-                    )  # or, value_temp=np.ones(len(idx))
+                    if use_UMI:
+                        value_temp = np.array(
+                            df_data.iloc[i]["obs_UMI_count"]
+                        )  # or, value_temp=np.ones(len(idx))
+                    else:
+                        value_temp = 1
                     X_clone_row.append(i)
                     X_clone_col.append(idx[0])
                     X_clone_val.append(value_temp)
@@ -77,17 +80,9 @@ def generate_adata(df_data, use_np_array=False):
         adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
     adata_orig.obs["obs_UMI_count"] = np.array(df_data["obs_UMI_count"])
     adata_orig.obs["sample"] = np.array(df_data["sample"])
-    adata_orig.obs["cell_id"] = [
-        f"{xx[-1]}-{j}" for j, xx in enumerate(df_data["mouse"])
-    ]
-    adata_orig.obs["mouse"] = np.array(df_data["mouse"])
-    clone_idx = (X_clone > 0).sum(
-        0
-    ).A.flatten() > 1  # select clones observed in more than one cells.
-    adata_orig.uns["multicell_clones"] = clone_idx
-    adata_orig.obs["cells_from_multicell_clone"] = (X_clone[:, clone_idx] > 0).sum(
-        1
-    ).A.flatten() > 0
+    adata_orig.obs["cell_id"] = [f"{xx}_{j}" for j, xx in enumerate(df_data["sample"])]
+    if "mouse" in df_data.keys():
+        adata_orig.obs["mouse"] = np.array(df_data["mouse"])
     adata_orig.var_names = all_mutation
     return adata_orig
 
@@ -97,6 +92,16 @@ def load_allele_info(data_path):
     allele_freqs = pooled_data["allele_freqs"].flatten()
     alleles = [xx[0][0] for xx in pooled_data["AlleleAnnotation"]]
     return pd.DataFrame({"allele": alleles, "UMI_count": allele_freqs})
+
+
+def keep_informative_cell_and_clones(adata):
+    # select clones observed in more than one cells.
+    # and keep cells that have at least one clone
+    clone_idx = (adata.X > 0).sum(0).A.flatten() > 1
+    cell_idx = (adata.X[:, clone_idx] > 0).sum(1).A.flatten() > 0
+    adata_new = adata[:, clone_idx][cell_idx]
+    adata_new.obsm["X_clone"] = adata_new.X
+    return adata_new
 
 
 def query_allele_frequencies(df_reference, df_target):
@@ -204,3 +209,54 @@ def evaluate_coupling_matrix(
         # ax.set_title(f'Mean: {np.mean(map_score):.2f}')
         ax.set_title(f"Fraction (>1.3): {np.mean(map_score>1.3):.2f}")
     return map_score
+
+
+def visualize_tree(
+    input_tree,
+    color_coding=None,
+    mode="r",
+    width=60,
+    height=60,
+    dpi=300,
+    data_des="tree",
+    figure_path=".",
+):
+    """
+    mode: r or c
+    """
+
+    from ete3 import AttrFace, NodeStyle, Tree, TreeStyle, faces
+    from IPython.display import Image, display
+
+    def layout(node):
+        if node.is_leaf():
+            N = AttrFace("name", fsize=5)
+            faces.add_face_to_node(N, node, 100, position="aligned")
+            # pass
+
+    if color_coding is not None:
+        print("coding")
+        for n in input_tree.traverse():
+            nst1 = NodeStyle(size=1, fgcolor="#f0f0f0")
+            n.set_style(nst1)
+
+        for n in input_tree:
+            for key, value in color_coding.items():
+                if n.name.startswith(key):
+                    nst1 = NodeStyle(size=1)
+                    nst1["bgcolor"] = value
+                    n.set_style(nst1)
+
+    ts = TreeStyle()
+    ts.layout_fn = layout
+    ts.show_leaf_name = False
+    ts.mode = mode
+    input_tree.render(
+        os.path.join(figure_path, f"{data_des}.png"),
+        tree_style=ts,
+        w=60,
+        h=60,
+        dpi=300,
+        units="mm",
+    )
+    display(Image(filename=os.path.join(figure_path, f"{data_des}.png")))
