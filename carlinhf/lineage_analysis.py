@@ -79,11 +79,23 @@ def generate_adata(df_data, use_np_array=False, use_UMI=True):
     if "expected_frequency" in df_data.keys():
         adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
     adata_orig.obs["obs_UMI_count"] = np.array(df_data["obs_UMI_count"])
-    adata_orig.obs["sample"] = np.array(df_data["sample"])
-    adata_orig.obs["cell_id"] = [f"{xx}_{j}" for j, xx in enumerate(df_data["sample"])]
+
+    # adata_orig.obs["cell_id"] = [f"{xx}_{j}" for j, xx in enumerate(df_data["sample"])]
     if "mouse" in df_data.keys():
         adata_orig.obs["mouse"] = np.array(df_data["mouse"])
     adata_orig.var_names = all_mutation
+
+    if "sample" in df_data.keys():
+        adata_orig.obs["sample"] = np.array(df_data["sample"])
+        allele_dict = {}
+        unique_alleles = sorted(list(set(adata_orig.obs["allele"])))
+        for j, x in enumerate(unique_alleles):
+            allele_dict[x] = str(j)
+        allele_id_array = []
+        for j, x in enumerate(adata_orig.obs["allele"]):
+            allele_id_array.append(str(allele_dict[x]) + "_" + str(j))
+        adata_orig.obs["cell_id"] = adata_orig.obs["sample"] + "*" + allele_id_array
+
     return adata_orig
 
 
@@ -94,14 +106,111 @@ def load_allele_info(data_path):
     return pd.DataFrame({"allele": alleles, "UMI_count": allele_freqs})
 
 
-def keep_informative_cell_and_clones(adata):
+def mutation_count_dictionary(df_data, count_key="UMI_count"):
+    mutation_dict = {}
+    from tqdm import tqdm
+
+    mutation_per_allele = []
+
+    for i in tqdm(range(len(df_data))):
+        xx = df_data["allele"].values[i]
+        UMI_count = df_data[count_key].values[i]
+        mutation_per_allele.append(len(xx.split(",")))
+        for mut in xx.split(","):
+            if mut not in mutation_dict.keys():
+                mutation_dict[mut] = UMI_count
+            else:
+                mutation_dict[mut] = mutation_dict[mut] + UMI_count
+
+    print(f"mutation number {len(mutation_dict)}; total allele number  {len(df_data)}")
+
+    ax = sns.histplot(x=mutation_per_allele, binwidth=0.5)
+    ax.set_xlabel("Mutation number per allele")
+    ax.set_ylabel("Count")
+    ax.set_title(f"Mean: {np.mean(mutation_per_allele):.1f}")
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    return mutation_dict, mutation_per_allele
+
+
+def generate_FrequencyCounts(df_raw, save_dir=None):
+    """
+    df_raw is a pandas object, with
+    'allele','UMI_count'
+    """
+    df_input = df_raw.set_index("allele")
+    all_alleles = list(set(df_input.index))
+    UMI_count = np.zeros(len(all_alleles))
+    from tqdm import tqdm
+
+    for j in tqdm(range(len(all_alleles))):
+        xx = all_alleles[j]
+        UMI_count[j] = df_input.loc[xx]["UMI_count"].sum()
+
+    unique_count = np.sort(list(set(UMI_count))).astype(int)
+    count_frequency = np.zeros(len(unique_count), dtype=int)
+    for j, x in enumerate(unique_count):
+        count_frequency[j] = np.sum(UMI_count == x)
+
+    df_count = pd.DataFrame(
+        {"UMI_count": unique_count, "Frequency": count_frequency}
+    ).set_index("UMI_count")
+    if save_dir is not None:
+        df_count.to_csv(f"{save_dir}/FrequencyCounts.csv", header=None)
+    return df_count
+
+
+def keep_informative_cell_and_clones(
+    adata, clone_size_thresh=2, barcode_num_per_cell=1
+):
     # select clones observed in more than one cells.
     # and keep cells that have at least one clone
-    clone_idx = (adata.X > 0).sum(0).A.flatten() > 1
-    cell_idx = (adata.X[:, clone_idx] > 0).sum(1).A.flatten() > 0
+    clone_idx = (adata.X > 0).sum(0).A.flatten() >= clone_size_thresh
+    cell_idx = (adata.X[:, clone_idx] > 0).sum(1).A.flatten() >= barcode_num_per_cell
     adata_new = adata[:, clone_idx][cell_idx]
     adata_new.obsm["X_clone"] = adata_new.X
     return adata_new
+
+
+def subsample_allele_frequency_count(df_input, sp_fraction, out_dir):
+    """
+    df_input: pd object from FrequencyCounts.csv
+    """
+
+    allele_frequency = []
+    for j in range(len(df_input)):
+        allele_frequency += list(
+            np.zeros(df_input.iloc[j].Count) + df_input.iloc[j].Frequency
+        )
+
+    allele_frequency_sp = []
+    for x in allele_frequency:
+        y = rng.binomial(x, sp_fraction)
+        allele_frequency_sp.append(y)
+
+    unique_frequency = np.array(list(set(allele_frequency_sp)))
+    allele_frequency_sp = np.array(allele_frequency_sp)
+    freq_array = np.zeros(len(unique_frequency), dtype=int)
+    count_array = np.zeros(len(unique_frequency), dtype=int)
+    unique_frequency = np.sort(unique_frequency)
+    for j, x in enumerate(unique_frequency):
+        freq_array[j] = x
+        count = np.sum(allele_frequency_sp == x)
+        count_array[j] = count
+
+    df_sp = pd.DataFrame(
+        {"Frequency": freq_array[1:], "Count": count_array[1:]}
+    ).set_index("Frequency")
+    ax = sns.scatterplot(data=df_input, x="Frequency", y="Count", label="Original")
+    ax = sns.scatterplot(
+        data=df_sp, x="Frequency", y="Count", label=f"Sample:{sp_fraction:.1f}", ax=ax
+    )
+    plt.xscale("log")
+    plt.show()
+    # plt.yscale('log')
+
+    data_path = f"{out_dir}/sp_{sp_fraction:.1f}"
+    os.makedirs(data_path, exist_ok=True)
+    df_sp.to_csv(f"{data_path}/FrequencyCounts.csv", header=None)
 
 
 def query_allele_frequencies(df_reference, df_target):
@@ -126,6 +235,48 @@ def onehot(input_dict):
         output_dict[key] = list(temp)
 
     return output_dict
+
+
+def tree_reconstruction_accuracy_v1(my_tree, origin_score, weight_factor=1, plot=False):
+    """
+    origin_score:
+        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name.
+        We recommend to symmetric value like -1 and 1, instead of 0 and 1. Otherwise, our weighting scheme is not working
+    """
+
+    node_score = {}
+    for key, value in node_mapping.items():
+        temp_scores = [origin_score[x] for x in value]
+        node_score[key] = np.mean(temp_scores, axis=0) / weight_factor ** len(
+            temp_scores
+        )
+
+    score_pairs = []
+    child_nodes = []
+    parent_nodes = []
+    for key, value in parent_map.items():
+        child_nodes.append(key)
+        parent_nodes.append(value)
+    df = pd.DataFrame({"child": child_nodes, "parent": parent_nodes}).set_index(
+        "parent"
+    )
+    for unique_parent in list(set(parent_nodes)):
+        temp_pair = [node_score[xx] for xx in df.loc[unique_parent]["child"].values]
+        score_pairs.append(temp_pair)
+    score_pairs = np.array(score_pairs)
+    score_pairs_flatten = [
+        score_pairs[:, 0, :].flatten(),
+        score_pairs[:, 1, :].flatten(),
+    ]
+
+    if plot:
+        ax = sns.scatterplot(x=score_pairs_flatten[0], y=score_pairs_flatten[1])
+        ax.set_xlabel("Membership score for node a")
+        ax.set_ylabel("Membership score for node b")
+        ax.set_title(f"Decay factor={weight_factor:.2f}")
+
+    corr = np.corrcoef(score_pairs_flatten[0], score_pairs_flatten[1])[0, 1]
+    return corr, score_pairs_flatten
 
 
 def tree_reconstruction_accuracy(
@@ -173,6 +324,9 @@ def tree_reconstruction_accuracy(
 
 
 def shuffle_matrix(matrix_0, run=10):
+    """
+    requires a numpy array
+    """
     matrix = matrix_0.copy()
     sub_size = int(np.max([1, matrix.shape[0] / 1000]))
     for x in range(run):
@@ -208,6 +362,23 @@ def evaluate_coupling_matrix(
         ax.set_ylabel("Count")
         # ax.set_title(f'Mean: {np.mean(map_score):.2f}')
         ax.set_title(f"Fraction (>1.3): {np.mean(map_score>1.3):.2f}")
+
+        fig, ax = plt.subplots(figsize=(5, 4))
+        # plot the cumulative histogram
+        n, bins, patches = ax.hist(
+            map_score,
+            bins=100,
+            density=True,
+            histtype="step",
+            cumulative=True,
+            label="Empirical",
+        )
+        # tidy up the figure
+        ax.grid(True)
+        ax.legend(loc="upper left")
+        ax.set_title("Cumulative step histograms")
+        ax.set_xlabel("Lineage coupling accuracy")
+        ax.set_ylabel("Cumulative probability")
     return map_score
 
 
@@ -251,12 +422,97 @@ def visualize_tree(
     ts.layout_fn = layout
     ts.show_leaf_name = False
     ts.mode = mode
+    # ts.extra_branch_line_color = "red"
+    # ts.extra_branch_line_type = 0
+    input_tree.render(
+        os.path.join(figure_path, f"{data_des}.pdf"),
+        tree_style=ts,
+        w=width,
+        h=height,
+        units="mm",
+    )
     input_tree.render(
         os.path.join(figure_path, f"{data_des}.png"),
         tree_style=ts,
-        w=60,
-        h=60,
-        dpi=300,
+        w=width,
+        h=height,
+        dpi=dpi,
         units="mm",
     )
+
     display(Image(filename=os.path.join(figure_path, f"{data_des}.png")))
+
+
+def clonal_analysis(
+    adata_sub, data_des="all", scenario="coarse", data_path=".", color_coding=None
+):
+
+    if scenario == "coarse":
+        print("coarse-grained analysis")
+        ## generate plots for the coarse-grained data
+        # adata_sub.obs["state_info"] = adata_sub.obs["sample"]
+        adata_sub.uns["data_des"] = [f"{data_des}_coarse"]
+        cs.settings.data_path = data_path
+        cs.settings.figure_path = data_path
+        os.makedirs(data_path, exist_ok=True)
+        cs.pl.barcode_heatmap(
+            adata_sub,
+            color_bar=True,
+            fig_height=10,
+            fig_width=10,
+            y_ticks=None,  # adata_sub.var_names,
+            x_label="Allele",
+            y_label="Mutation",
+        )
+        cs.tl.fate_coupling(adata_sub, source="X_clone")
+        cs.pl.fate_coupling(adata_sub, source="X_clone")
+        cs.tl.fate_hierarchy(adata_sub, source="X_clone")
+        my_tree_coarse = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
+        with open(f"{cs.settings.data_path}/{data_des}_coarse_tree.txt", "w") as f:
+            f.write(my_tree_coarse.write())
+
+        visualize_tree(
+            my_tree_coarse,
+            color_coding=color_coding,
+            mode="r",
+            data_des=f"{data_des}_coarse",
+            figure_path=cs.settings.data_path,
+        )
+
+    else:
+        print("refined analysis, using all cells")
+        ## refined heatmap and coupling, no ticks
+        # adata_sub.obs["state_info"] = adata_sub.obs["cell_id"]
+        adata_sub.uns["data_des"] = [f"{data_des}_refined"]
+        cs.pl.barcode_heatmap(
+            adata_sub,
+            color_bar=True,
+            fig_height=10,
+            fig_width=12,
+            y_ticks=None,  # adata_sub.var_names,
+            x_label="Allele",
+            y_label="Mutation",
+            x_ticks=None,
+        )
+        cs.tl.fate_coupling(adata_sub, source="X_clone")
+        cs.pl.fate_coupling(
+            adata_sub,
+            source="X_clone",
+            x_ticks=None,
+            y_ticks=None,
+            x_label="Allele",
+            y_label="Allele",
+        )
+        cs.tl.fate_hierarchy(adata_sub, source="X_clone")
+        my_tree_refined = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
+        with open(f"{cs.settings.data_path}/{data_des}_refined_tree.txt", "w") as f:
+            f.write(my_tree_refined.write())
+
+        visualize_tree(
+            my_tree_refined,
+            color_coding=color_coding,
+            mode="c",
+            data_des=f"{data_des}_refined",
+            figure_path=cs.settings.figure_path,
+            dpi=300,
+        )
