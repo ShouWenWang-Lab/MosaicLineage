@@ -11,6 +11,55 @@ from tqdm import tqdm
 from umi_tools import UMIClusterer
 
 
+def denoise_clonal_data(
+    df_input,
+    key_list=["umi", "clone_id"],
+    base_read_cutoff=10,
+    method="single_cell",
+    read_cutoff_ratio=0.5,
+):
+    """
+    Clean umi and LARRY barcode within each cell (especially that the cell barcode is pre-filtered)
+    """
+
+    if method == "single_cell":
+        cell_id_list = list(set(df_input["cell_id"]))
+        df_list = []
+        for j in tqdm(range(len(cell_id_list))):
+            cell_id_temp = cell_id_list[j]
+            df_temp = df_input[df_input["cell_id"] == cell_id_temp]
+            read_cutoff = np.max(
+                [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
+            )
+            df_temp_1 = df_temp[df_temp["read"] >= read_cutoff]
+            if len(df_temp_1) > 0:
+                for key_temp in key_list:
+                    clustered_umis, umi_count, new_seq_list = denoise_sequence(
+                        df_temp_1[key_temp]
+                    )
+                    df_temp_1.loc[:, key_temp] = new_seq_list
+                df_list.append(df_temp_1)
+        df_HQ = pd.concat(df_list)
+    else:
+        df_HQ = df_input[(df_input.read >= base_read_cutoff)]
+        for key_temp in key_list:
+            print(
+                f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_HQ[key_temp]))}"
+            )
+            clustered_umis, umi_count, new_seq_list = denoise_sequence(df_HQ[key_temp])
+            df_HQ[key_temp] = new_seq_list
+            print(
+                f"Number of unique elements (after cleaning): {len(set(df_HQ[key_temp]))}"
+            )
+
+    df_out = df_HQ.groupby(["library", "cell_id", "clone_id"]).sum("read")
+    df_out["umi_count"] = (
+        df_HQ.groupby(["library", "cell_id", "clone_id"])["umi"].count().values
+    )
+    df_out = df_out.reset_index()
+    return df_out
+
+
 def denoise_sequence(seq_list):
     seq_list = np.array(seq_list).astype(bytes)
     threshold = round(0.1 * len(seq_list[0]))
@@ -167,32 +216,36 @@ def QC_clonal_barcode_statistics(df0, read_cutoff=3):
     return df_statis
 
 
-def QC_read_per_molecule(df_input):
-    df_plot = pd.DataFrame(
-        {
-            "Read_per_cell": df_input.groupby("cell_id").sum("read")["read"],
-            "UMI_LARRY_number": df_input.groupby("cell_id").count()["read"],
-        }
-    )
-    f, ax = plt.subplots(1, 1, figsize=(6, 4))
-    ax = sns.scatterplot(data=df_plot, x="Read_per_cell", y="UMI_LARRY_number", ax=ax)
-    ax = sns.rugplot(data=df_plot, x="Read_per_cell", y="UMI_LARRY_number", ax=ax)
-    ax.set_xlabel("Read number per cell")
-    ax.set_ylabel("# of UMI+LARRY variants per cell")
-    plt.xscale("log")
-    plt.yscale("log")
+def QC_read_per_molecule(df_input, key_list=["clone_id", "umi"]):
+    for key in key_list:
+        df_temp = df_input.groupby(["cell_id", key]).sum("read").reset_index()
+        df_plot = pd.DataFrame(
+            {
+                "Read_per_cell": df_temp.groupby("cell_id").sum("read")["read"].values,
+                f"{key} number": df_temp.groupby("cell_id").count()[key].values,
+            }
+        )
+        # This is much faster
+        f, ax = plt.subplots(1, 1, figsize=(6, 4))
+        ax.scatter(df_plot["Read_per_cell"], df_plot[f"{key} number"], marker=".", s=3)
+        ax.set_xlabel("Read number per cell")
+        ax.set_ylabel(f"# of {key} per cell")
+        plt.xscale("log")
+        plt.yscale("log")
 
-    f, ax = plt.subplots(1, 1, figsize=(6, 4))
-    ax = sns.histplot(data=df_plot, x="Read_per_cell", bins=100, log_scale=True, ax=ax)
-    ax.set_xlabel("Read number per cell")
-    ax.set_ylabel("Histogram (# of cells)")
+        f, ax = plt.subplots(1, 1, figsize=(6, 4))
+        ax = sns.histplot(
+            data=df_plot, x="Read_per_cell", bins=100, log_scale=True, ax=ax
+        )
+        ax.set_xlabel("Read number per cell")
+        ax.set_ylabel("Histogram (# of cells)")
 
-    f, ax = plt.subplots(1, 1, figsize=(6, 4))
-    ax = sns.histplot(
-        data=df_plot, x="UMI_LARRY_number", bins=100, log_scale=True, ax=ax
-    )
-    ax.set_xlabel("Read number per cell")
-    ax.set_ylabel("# of UMI+LARRY variants per cell")
+        f, ax = plt.subplots(1, 1, figsize=(6, 4))
+        ax = sns.histplot(
+            data=df_plot, x=f"{key} number", bins=100, log_scale=True, ax=ax
+        )
+        ax.set_xlabel("Read number per cell")
+        ax.set_ylabel(f"# of {key} per cell")
 
 
 def QC_unique_cells(df, keys=["cell_id", "clone_id"], base=2):
@@ -218,55 +271,6 @@ def QC_unique_cells(df, keys=["cell_id", "clone_id"], base=2):
         plt.xscale("log")
         plt.yscale("log")
         ax.set_ylabel(f"Unique {key} number")
-
-
-def denoise_clonal_data(
-    df_input,
-    key_list=["umi", "clone_id"],
-    base_read_cutoff=10,
-    method="single_cell",
-    read_cutoff_ratio=0.5,
-):
-    """
-    Clean umi and LARRY barcode within each cell (especially that the cell barcode is pre-filtered)
-    """
-
-    if method == "single_cell":
-        cell_id_list = list(set(df_input["cell_id"]))
-        df_list = []
-        for j in tqdm(range(len(cell_id_list))):
-            cell_id_temp = cell_id_list[j]
-            df_temp = df_input[df_input["cell_id"] == cell_id_temp]
-            read_cutoff = np.max(
-                [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
-            )
-            df_temp_1 = df_temp[df_temp["read"] >= read_cutoff]
-            if len(df_temp_1) > 0:
-                for key_temp in key_list:
-                    clustered_umis, umi_count, new_seq_list = denoise_sequence(
-                        df_temp_1[key_temp]
-                    )
-                    df_temp_1.loc[:, key_temp] = new_seq_list
-                df_list.append(df_temp_1)
-        df_HQ = pd.concat(df_list)
-    else:
-        df_HQ = df_input[(df_input.read >= base_read_cutoff)]
-        for key_temp in key_list:
-            print(
-                f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_HQ[key_temp]))}"
-            )
-            clustered_umis, umi_count, new_seq_list = denoise_sequence(df_HQ[key_temp])
-            df_HQ[key_temp] = new_seq_list
-            print(
-                f"Number of unique elements (after cleaning): {len(set(df_HQ[key_temp]))}"
-            )
-
-    df_out = df_HQ.groupby(["library", "cell_id", "clone_id"]).sum("read")
-    df_out["umi_count"] = (
-        df_HQ.groupby(["library", "cell_id", "clone_id"])["umi"].count().values
-    )
-    df_out = df_out.reset_index()
-    return df_out
 
 
 def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
