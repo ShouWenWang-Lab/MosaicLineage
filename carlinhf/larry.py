@@ -13,10 +13,11 @@ from umi_tools import UMIClusterer
 
 def denoise_clonal_data(
     df_input,
-    key_list=["umi", "clone_id"],
+    target_keys=["umi", "clone_id"],
     base_read_cutoff=10,
     method="single_cell",
     read_cutoff_ratio=0.5,
+    threshold=None,
 ):
     """
     Clean umi and LARRY barcode within each cell (especially that the cell barcode is pre-filtered)
@@ -33,20 +34,22 @@ def denoise_clonal_data(
             )
             df_temp_1 = df_temp[df_temp["read"] >= read_cutoff]
             if len(df_temp_1) > 0:
-                for key_temp in key_list:
+                for key_temp in target_keys:
                     clustered_umis, umi_count, new_seq_list = denoise_sequence(
-                        df_temp_1[key_temp]
+                        df_temp_1[key_temp], threshold=threshold
                     )
                     df_temp_1.loc[:, key_temp] = new_seq_list
                 df_list.append(df_temp_1)
         df_HQ = pd.concat(df_list)
     else:
         df_HQ = df_input[(df_input.read >= base_read_cutoff)]
-        for key_temp in key_list:
+        for key_temp in target_keys:
             print(
                 f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_HQ[key_temp]))}"
             )
-            clustered_umis, umi_count, new_seq_list = denoise_sequence(df_HQ[key_temp])
+            clustered_umis, umi_count, new_seq_list = denoise_sequence(
+                df_HQ[key_temp], threshold=threshold
+            )
             df_HQ[key_temp] = new_seq_list
             print(
                 f"Number of unique elements (after cleaning): {len(set(df_HQ[key_temp]))}"
@@ -60,9 +63,11 @@ def denoise_clonal_data(
     return df_out
 
 
-def denoise_sequence(seq_list):
+def denoise_sequence(seq_list, threshold=None):
     seq_list = np.array(seq_list).astype(bytes)
-    threshold = round(0.1 * len(seq_list[0]))
+    if threshold is None:
+        threshold = round(0.1 * len(seq_list[0]))
+    print(f"Sequences within Hamming distance {threshold} are connected")
     umi_count = {xx: np.sum(seq_list == xx) for xx in set(seq_list)}
 
     clusterer = UMIClusterer(cluster_method="directional")
@@ -76,8 +81,10 @@ def denoise_sequence(seq_list):
     return correction_dict, umi_count, np.array(new_seq_list).astype(str)
 
 
-def QC_sequence_distance(source_seqs, target_seqs=None, Kmer=1):
+def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=False):
     """
+    First, remove duplicate sequences
+
     We partition the sequence into Kmers
     eg. 'ABCDEF', Kmers=2 -> ['AB','CD','EF']
     Then, calculate the Hamming distance in the kmer space
@@ -85,11 +92,16 @@ def QC_sequence_distance(source_seqs, target_seqs=None, Kmer=1):
     This calculation is exact, and can be slow for large amount of sequences
     """
 
-    source_seqs = np.array([seq_partition(Kmer, xx) for xx in list(source_seqs)])
-    if target_seqs is None:
+    if deduplicate:
+        source_seqs_0 = list(set(source_seqs_0))
+        if target_seqs_0 is not None:
+            target_seqs_0 = list(set(target_seqs_0))
+
+    source_seqs = np.array([seq_partition(Kmer, xx) for xx in source_seqs_0])
+    if target_seqs_0 is None:
         target_seqs = source_seqs
     else:
-        target_seqs = np.array([seq_partition(Kmer, xx) for xx in list(target_seqs)])
+        target_seqs = np.array([seq_partition(Kmer, xx) for xx in target_seqs_0])
 
     seq_N = len(target_seqs)
     ini_N = len(source_seqs)
@@ -102,11 +114,18 @@ def QC_sequence_distance(source_seqs, target_seqs=None, Kmer=1):
         for j in tqdm(range(len(source_seqs))):
             distance[j, :] = np.sum(target_seqs != source_seqs[j], 1)
 
-    fig, ax = plt.subplots()
-    sns.histplot(distance[np.triu(distance, k=1) > 0], bins=100, ax=ax)
-    plt.yscale("log")
-    ax.set_xlabel("Hamming distance")
     return distance
+
+
+def plot_seq_distance(distance, log_scale=True):
+    np.fill_diagonal(distance, np.inf)
+    fig, ax = plt.subplots()
+    min_distance = distance.min(axis=1)
+    sns.histplot(min_distance, bins=100, ax=ax)
+    if log_scale:
+        plt.yscale("log")
+    ax.set_xlabel("Minimum intra-seq hamming distance")
+    return min_distance
 
 
 def seq_partition(n, seq):
@@ -121,61 +140,10 @@ def seq_partition(n, seq):
         return ["".join(x) for x in tz.partition(n, seq)]
 
 
-def get_X_clone_with_reference_ordering(
-    clone_data_cell_id,
-    clone_data_barcode_id,
-    reference_cell_id=None,
-    reference_clone_id=None,
-):
+def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True):
     """
-    Build the X_clone matrix from data.
-
-    Convert the raw clonal data table (long format): [clone_data_cell_id,clone_data_barcode_id]
-    to X_clone (wide format) based on the reference_cell_id.
-
-    Parameters
-    ----------
-    clone_data_cell_id: `list`
-        The list of cell id for each corresponding sequenced barcode.
-    clone_data_barcode_id: `list`
-        The list of barcode id from sequencing. It has the same shape as clone_data_cell_id.
-    reference_cell_id: `list`, optional (default: None)
-        A list of uniuqe cell id. X_clone will be generated based on its cell id ordering.
-    reference_clone_id: `list`, optional (default: None)
-        A list of uniuqe clone id. If provided, X_clone will be generated based on its barcode ordering.
-
-    Returns
-    -------
-    X_clone: `np.array`
-        The clonal data matrix, with the row in cell id, and column in barcode id.
-    reference_clone_id: `list`
+    Get Number of clonal bc per cell
     """
-
-    if reference_clone_id is None:
-        reference_clone_id = list(set(clone_data_barcode_id))
-    if reference_cell_id is None:
-        reference_cell_id = list(set(clone_data_cell_id))
-
-    reference_clone_id = np.array(reference_clone_id)
-    reference_cell_id = np.array(reference_cell_id)
-    ## generate X_clone where the cell idx have been sorted
-    X_clone = np.zeros((len(reference_cell_id), len(reference_clone_id)))
-    print(f"Total number of entries: {len(clone_data_cell_id)}")
-
-    for j in tqdm(range(len(clone_data_cell_id))):
-        if j % 100000 == 99999:
-            print(f"Current entry ID: {j}")
-        cell_id_1 = np.nonzero(reference_cell_id == clone_data_cell_id[j])[0]
-        clone_id_1 = np.nonzero(reference_clone_id == clone_data_barcode_id[j])[0]
-        # X_clone[cell_id_1,clone_id_1] += 1
-        X_clone[cell_id_1, clone_id_1] = 1
-
-    sp_idx = X_clone.sum(0) > 0
-    X_clone_new = ssp.csr_matrix(X_clone[:, sp_idx])
-    return X_clone_new, reference_clone_id[sp_idx], reference_cell_id
-
-
-def QC_cell_barcode_statistics(df0, read_cutoff=3):
     clonal_bc_N = []
     tot_read = []
     bc_list = []
@@ -191,15 +159,15 @@ def QC_cell_barcode_statistics(df0, read_cutoff=3):
     df_statis = pd.DataFrame(
         {"cell_id": bc_list, "tot_read": tot_read, "clonal_bc_number": clonal_bc_N}
     )
-    ax = sns.histplot(data=df_statis, x="clonal_bc_number")
-    ax.set_xlabel("Number of clonal bc per cell")
-    ax.set_ylabel("Count")
+    if plot:
+        ax = sns.histplot(data=df_statis, x="clonal_bc_number")
+        ax.set_xlabel("Number of clonal bc per cell")
+        ax.set_ylabel("Count")
     return df_statis
 
 
-def QC_clonal_barcode_statistics(df0, read_cutoff=3):
+def QC_clone_size(df0, read_cutoff=3, log_scale=False, plot=True):
     clone_size = []
-    tot_read = []
     bc_list = []
     df = df0[df0["read"] >= read_cutoff]
     for bc in list(set(df["clone_id"])):
@@ -209,46 +177,72 @@ def QC_clonal_barcode_statistics(df0, read_cutoff=3):
         bc_list.append(bc)
 
     df_statis = pd.DataFrame({"clone_id": bc_list, "clone_size": clone_size})
-    ax = sns.histplot(data=df_statis, x="clone_size")
-    ax.set_xlabel("Clone size")
-    ax.set_ylabel("Count")
-
+    if plot:
+        ax = sns.histplot(data=df_statis, x="clone_size")
+        ax.set_xlabel("Clone size")
+        ax.set_ylabel("Count")
+        if log_scale:
+            plt.xscale("log")
+            plt.yscale("log")
     return df_statis
 
 
-def QC_read_per_molecule(df_input, key_list=["clone_id", "umi"]):
-    for key in key_list:
-        df_temp = df_input.groupby(["cell_id", key]).sum("read").reset_index()
+def QC_read_per_molecule(
+    df_input_0,
+    target_keys=["clone_id", "umi"],
+    group_key="cell_id",
+    log_scale=True,
+    read_cutoff=None,
+):
+    if read_cutoff is not None:
+        df_input = df_input_0[df_input_0.read >= read_cutoff]
+    else:
+        df_input = df_input_0
+    for key in target_keys:
+        df_temp = df_input.groupby([group_key, key]).sum("read").reset_index()
         df_plot = pd.DataFrame(
             {
-                "Read_per_cell": df_temp.groupby("cell_id").sum("read")["read"].values,
-                f"{key} number": df_temp.groupby("cell_id").count()[key].values,
+                f"Read per {group_key}": df_temp.groupby(group_key)
+                .sum("read")["read"]
+                .values,
+                f"{key} number": df_temp.groupby(group_key).count()[key].values,
             }
         )
         # This is much faster
         f, ax = plt.subplots(1, 1, figsize=(6, 4))
-        ax.scatter(df_plot["Read_per_cell"], df_plot[f"{key} number"], marker=".", s=3)
-        ax.set_xlabel("Read number per cell")
-        ax.set_ylabel(f"# of {key} per cell")
-        plt.xscale("log")
-        plt.yscale("log")
+        ax.scatter(
+            df_plot[f"Read per {group_key}"], df_plot[f"{key} number"], marker=".", s=3
+        )
+        ax.set_xlabel(f"Number of reads per {group_key}")
+        ax.set_ylabel(f"Number of {key} per cell")
+        if log_scale:
+            plt.xscale("log")
+            plt.yscale("log")
 
         f, ax = plt.subplots(1, 1, figsize=(6, 4))
         ax = sns.histplot(
-            data=df_plot, x="Read_per_cell", bins=100, log_scale=True, ax=ax
+            data=df_plot,
+            x=f"Read per {group_key}",
+            bins=100,
+            log_scale=log_scale,
+            ax=ax,
         )
-        ax.set_xlabel("Read number per cell")
-        ax.set_ylabel("Histogram (# of cells)")
+        ax.set_xlabel(f"Number of reads per {group_key}")
+        ax.set_ylabel("Histogram")
+        if log_scale:
+            plt.yscale("log")
 
         f, ax = plt.subplots(1, 1, figsize=(6, 4))
         ax = sns.histplot(
-            data=df_plot, x=f"{key} number", bins=100, log_scale=True, ax=ax
+            data=df_plot, x=f"{key} number", bins=100, log_scale=log_scale, ax=ax
         )
-        ax.set_xlabel("Read number per cell")
-        ax.set_ylabel(f"# of {key} per cell")
+        ax.set_xlabel(f"Number of {key} per cell")
+        ax.set_ylabel(f"Histogram")
+        if log_scale:
+            plt.yscale("log")
 
 
-def QC_unique_cells(df, keys=["cell_id", "clone_id"], base=2):
+def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=2, log_scale=True):
     max_read = df["read"].max()
     upper_log2 = np.ceil(np.log(max_read) / np.log(base))
     read_cutoff_list = []
@@ -258,18 +252,19 @@ def QC_unique_cells(df, keys=["cell_id", "clone_id"], base=2):
         read_cutoff_list.append(read_cutoff)
         df_temp = df[df["read"] >= read_cutoff].reset_index()
         temp_list = []
-        for key in keys:
+        for key in target_keys:
             temp_list.append(len(set(df_temp[key])))
 
         unique_count.append(temp_list)
 
     unique_count = np.array(unique_count)
-    for j, key in enumerate(keys):
+    for j, key in enumerate(target_keys):
         fig, ax = plt.subplots()
         ax = sns.scatterplot(read_cutoff_list, unique_count[:, j])
         ax.set_xlabel("Read cutoff")
-        plt.xscale("log")
-        plt.yscale("log")
+        if log_scale:
+            plt.xscale("log")
+            plt.yscale("log")
         ax.set_ylabel(f"Unique {key} number")
 
 
@@ -337,3 +332,39 @@ def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
         df_list.append(data_table)
     df_all = pd.concat(df_list)
     return df_all
+
+
+def print_statistics(df, read_cutoff=None):
+    if read_cutoff is not None:
+        df_tmp = df[df.read >= read_cutoff]
+    else:
+        df_tmp = df
+    print(
+        f"Current cell number: {len(set(df_tmp['cell_id']))}\n"
+        f"current clone number: {len(set(df_tmp['clone_id']))}\n"
+        f"total reads: {np.sum(df_tmp['read'])/1000:.0f}K\n"
+    )
+
+
+def remove_cells(
+    df,
+    read_cutoff=None,
+    umi_cutoff=None,
+    clone_bc_number_cutoff=None,
+    clone_size_cutoff=None,
+):
+    df_out = df.copy()
+    if read_cutoff is not None:
+        df_out = df_out[df_out["read"] >= read_cutoff]
+    if umi_cutoff is not None:
+        df_out = df_out[df_out["umi_count"] >= umi_cutoff]
+    if clone_bc_number_cutoff is not None:
+        df_bc_N = QC_clonal_bc_per_cell(df_out, read_cutoff=0, plot=False)
+        df_bc_N = df_bc_N[df_bc_N["clonal_bc_number"] <= clone_bc_number_cutoff]
+        df_out = df_out[df_out.cell_id.isin(df_bc_N["cell_id"])]
+
+    if clone_size_cutoff is not None:
+        df_clone_N = QC_clone_size(df_out, read_cutoff=0, plot=False)
+        df_clone_N = df_clone_N[df_clone_N["clone_size"] <= clone_size_cutoff]
+        df_out = df_out[df_out.clone_id.isin(df_clone_N["clone_id"])]
+    return df_out
