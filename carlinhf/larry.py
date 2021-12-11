@@ -3,6 +3,8 @@ import os
 
 import numpy as np
 import pandas as pd
+
+pd.options.mode.chained_assignment = None  # default='warn'
 import scipy.sparse as ssp
 import seaborn as sns
 import toolz as tz
@@ -12,54 +14,102 @@ from umi_tools import UMIClusterer
 
 
 def denoise_clonal_data(
-    df_input_0,
-    target_keys=["umi", "clone_id"],
-    base_read_cutoff=[3, 3],
-    method="single_cell",
+    df_raw,
+    target_key="clone_id",
+    base_read_cutoff=3,
+    per_cell=False,
+    denoise_method="Hamming",
+    distance_threshold=None,
+    whiteList=None,
     read_cutoff_ratio=0.5,
-    threshold=[None, None],
 ):
     """
-    Clean umi and LARRY barcode within each cell (especially that the cell barcode is pre-filtered)
+    Denoise sequencing/PCR errors at a particular field.
+    At the end, it generates a QC plot in terms of the sequence separation
+
+    Parameters:
+    -----------
+    df_raw:
+        The raw data
+    target_key:
+        The target field to correct sequeuncing/PCR errors.
+    denoise_method:
+        "Hamming", or "UMI_tools". The "Hamming" method works better.
+    per_cell:
+        denoise for each cell sepaerately, where we adjust the read threshold per cell
+    distance_threshold:
+        distances to connect two sequences.
+    whiteList:
+        Only works for the method "Hamming"
+    read_cutoff_ratio:
+        only for per_cell=True. Help to modulate the read_cutoff per cell
+
+    Returns:
+    --------
+    The corrected sequence is updated at df_out
     """
-    assert len(base_read_cutoff) == len(target_keys)
-    assert len(threshold) == len(target_keys)
-    df_input = df_input_0.copy()
-    if method == "single_cell":
+
+    df_input = df_raw.copy()
+    if per_cell:
         cell_id_list = list(set(df_input["cell_id"]))
         df_list = []
         for j in tqdm(range(len(cell_id_list))):
             cell_id_temp = cell_id_list[j]
             df_temp = df_input[df_input["cell_id"] == cell_id_temp]
-            for j, key_temp in enumerate(target_keys):
-                read_cutoff = np.max(
-                    [base_read_cutoff[j], read_cutoff_ratio * np.max(df_temp["read"])]
+
+            read_cutoff = np.max(
+                [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
+            )
+            sp_idx = df_temp["read"] >= read_cutoff
+            if np.sum(sp_idx) > 0:
+                mapping, new_seq_list = denoise_sequence(
+                    df_temp[sp_idx][target_key],
+                    read_cout=df_temp[sp_idx]["read"],
+                    distance_threshold=distance_threshold,
+                    method=denoise_method,
                 )
-                sp_idx = df_temp["read"] >= read_cutoff
-                if np.sum(sp_idx) > 0:
-                    mapping, new_seq_list = denoise_sequence(
-                        df_temp[sp_idx][key_temp], threshold=threshold[j]
-                    )
-                    df_temp[key_temp][sp_idx] = new_seq_list
-                    df_temp[key_temp][~sp_idx] = np.nan
+                df_temp[target_key][sp_idx] = new_seq_list
+                df_temp[target_key][~sp_idx] = np.nan
+                df_temp[target_key][df_temp[target_key] == "nan"] = np.nan
             df_list.append(df_temp)
         df_HQ = pd.concat(df_list).dropna()
     else:
-        for j, key_temp in enumerate(target_keys):
-            sp_idx = df_input.read >= base_read_cutoff[j]
-            print(
-                f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_input[key_temp][sp_idx]))}"
-            )
-            mapping, new_seq_list = denoise_sequence(
-                df_input[sp_idx][key_temp], threshold=threshold[j]
-            )
-            df_input[key_temp][sp_idx] = new_seq_list
-            df_input[key_temp][~sp_idx] = np.nan
-            print(
-                f"Number of unique elements (after cleaning): {len(set(new_seq_list))}"
-            )
+        sp_idx = df_input.read >= base_read_cutoff
+        print(
+            f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx]))}"
+        )
+        mapping, new_seq_list = denoise_sequence(
+            df_input[sp_idx][target_key],
+            read_cout=df_input[sp_idx]["read"],
+            distance_threshold=distance_threshold,
+            whiteList=whiteList,
+            method=denoise_method,
+        )
+        df_input[target_key][sp_idx] = new_seq_list
+        df_input[target_key][~sp_idx] = np.nan
+        df_input[target_key][df_input[target_key] == "nan"] = np.nan
         df_HQ = df_input.dropna()
 
+    ## report
+    unique_seq = list(set(df_HQ[target_key]))
+    print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
+    read_fraction_all = df_HQ["read"].sum() / df_raw["read"].sum()
+    read_fraction_cutoff = (
+        df_HQ["read"].sum() / df_raw[df_raw["read"] >= base_read_cutoff]["read"].sum()
+    )
+    print(f"Retained read fraction (above cutoff 0): {read_fraction_all:.2f}")
+    print(
+        f"Retained read fraction (above cutoff {base_read_cutoff}): {read_fraction_cutoff:.2f}"
+    )
+
+    distance = QC_sequence_distance(unique_seq)
+    min_dis = plot_seq_distance(distance)
+
+    fig, ax = plt.subplots()
+    df_out = group_cells(df_HQ, group_keys=[target_key])
+    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=True)
+    ax.set_xlabel(f"Total read of corrected {target_key}")
+    ax.set_ylabel(f"Cumulative counts")
     return df_HQ
 
 
@@ -71,17 +121,27 @@ def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
 
 
 def denoise_sequence(
-    input_seqs, distance_threshold=1, method="UMI_tools", whiteList=None
+    input_seqs, read_cout=None, distance_threshold=1, method="Hamming", whiteList=None
 ):
     """
-    method="distance", or "UMI_tools"
-
-    seq_list: can be a list with duplicate sequences, indicating the read abundance of the read
+    Take the sequences, make a unique list, and order them by read count. The input_seqs does not need
+    to be unique. We will aggregate the read count for the same sequence. From top to bottom, we iteratively find its similar sequences in the rest of the sequence pool, and remove them.
 
     Note that the output seq list could contain 'nan' if whitelist is used
+
+    Parameters:
+    -----------
+    method:
+        "Hamming", or "UMI_tools"
+    seq_list:
+        can be a list with duplicate sequences, indicating the read abundance of the read
     """
     seq_list = np.array(input_seqs).astype(bytes)
-    df = pd.DataFrame({"seq": seq_list, "read": np.ones(len(seq_list))})
+    if read_cout is None:
+        read_count = np.ones(len(seq_list))
+    if len(read_cout) != len(input_seqs):
+        raise ValueError("read_count does not have the same size as input_seqs")
+    df = pd.DataFrame({"seq": seq_list, "read": read_cout})
     df = (
         df.groupby("seq").sum("read").reset_index().sort_values("read", ascending=False)
     )
@@ -99,7 +159,7 @@ def denoise_sequence(
         for umi_list in clustered_umis:
             for umi in umi_list:
                 mapping[umi] = umi_list[0]
-    else:
+    else:  # "Hamming"
         print(f"Sequences within Hamming distance {distance_threshold} are connected")
         # quality_seq_list = []
         mapping = {}
@@ -348,6 +408,9 @@ def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
 
     We use cell barcode + sample id to jointly update the cell_id tag
     We use the cell barcode + umi to jointly define the umi_id tag
+
+    We first load all data into memory before extract the read information. This assumes that
+    the data is not too big to fit into the memory (<10G ?)
     """
 
     df_list = []
@@ -360,15 +423,11 @@ def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
             f = gzip.open(f"{data_path}/{lib}.LARRY.fastq.gz")
 
             # for other files that starts with a normal line, skip the above two lines and run directly:
-            l = f.readline().decode("utf-8").strip("\n")
-
+            print(f"Reading in library {lib}")
+            all_lines = f.readlines()
             current_tag = []
-            i = 0
-            print("Reading in all barcodes")
-            while not (l == "" and len(current_tag) == 0):
-                i += 1
-                if i % (3 * 10 ** 6) == 0:
-                    print("Processed " + repr(int(i / 3)) + " reads")
+            for x in tqdm(all_lines):
+                l = x.decode("utf-8").strip("\n")
                 if l == "":
                     current_tag = []
                 elif l[0] == ">":
@@ -380,8 +439,6 @@ def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
                         counts[current_tag] = 0
                     counts[current_tag] += 1
 
-                l = f.readline().decode("utf-8").strip("\n")
-
             sample_id = [k[0] for k, v in counts.items()]
             cell_bc = [k[1] for k, v in counts.items()]
             umi_id = [k[2] for k, v in counts.items()]
@@ -392,12 +449,8 @@ def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
             data_table = pd.DataFrame(
                 {"library": library_id, "umi": umi_id, "cell_bc": cell_bc}
             )
-            data_table["umi_id"] = [
-                cell_bc[i] + "_" + umi_id[i] for i in range(len(umi_id))
-            ]
-            data_table["cell_id"] = [
-                library_id[i] + "_" + cell_bc[i] for i in range(len(umi_id))
-            ]
+            data_table["umi_id"] = data_table["cell_bc"] + "_" + data_table["umi"]
+            data_table["cell_id"] = data_table["library"] + "_" + data_table["cell_bc"]
             data_table["clone_id"] = gfp_bc_id
             data_table["read"] = read_count
             data_table.to_csv(f"{data_path}/{lib}.LARRY.csv")
@@ -452,14 +505,7 @@ def rename_library_info(df_all, mapping_dictionary):
                    'LARRY_Lime_36':'Lime_RNA_104','LARRY_10X_31':'MPP_10X_A3_1', 'LARRY_10X_32':'MPP_10X_A4_1'}
     """
 
-    new_id_list = []
-    for j in tqdm(range(len(df_all))):
-        xx = df_all["cell_id"].iloc[j]
-        lib = "_".join(xx.split("_")[:3])
-        new_lib = mapping_dictionary[lib]
-        bc = xx.split("_")[3]
-        new_id = new_lib + "_" + bc
-        new_id_list.append(new_id)
-    df_new = df_all.copy()
-    df_new["cell_id"] = new_id_list
-    return df_new
+    for key in tqdm(mapping_dictionary.keys()):
+        df_all["library"][df_all.library == key] = mapping_dictionary[key]
+    df_all.loc[:, "cell_id"] = df_all["library"] + "_" + df_all["cell_bc"]
+    return df_all
