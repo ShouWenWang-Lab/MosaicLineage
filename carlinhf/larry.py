@@ -12,73 +12,146 @@ from umi_tools import UMIClusterer
 
 
 def denoise_clonal_data(
-    df_input,
+    df_input_0,
     target_keys=["umi", "clone_id"],
-    base_read_cutoff=10,
+    base_read_cutoff=[3, 3],
     method="single_cell",
     read_cutoff_ratio=0.5,
-    threshold=None,
+    threshold=[None, None],
 ):
     """
     Clean umi and LARRY barcode within each cell (especially that the cell barcode is pre-filtered)
     """
-
+    assert len(base_read_cutoff) == len(target_keys)
+    assert len(threshold) == len(target_keys)
+    df_input = df_input_0.copy()
     if method == "single_cell":
         cell_id_list = list(set(df_input["cell_id"]))
         df_list = []
         for j in tqdm(range(len(cell_id_list))):
             cell_id_temp = cell_id_list[j]
             df_temp = df_input[df_input["cell_id"] == cell_id_temp]
-            read_cutoff = np.max(
-                [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
-            )
-            df_temp_1 = df_temp[df_temp["read"] >= read_cutoff]
-            if len(df_temp_1) > 0:
-                for key_temp in target_keys:
-                    clustered_umis, umi_count, new_seq_list = denoise_sequence(
-                        df_temp_1[key_temp], threshold=threshold
+            for j, key_temp in enumerate(target_keys):
+                read_cutoff = np.max(
+                    [base_read_cutoff[j], read_cutoff_ratio * np.max(df_temp["read"])]
+                )
+                sp_idx = df_temp["read"] >= read_cutoff
+                if np.sum(sp_idx) > 0:
+                    mapping, new_seq_list = denoise_sequence(
+                        df_temp[sp_idx][key_temp], threshold=threshold[j]
                     )
-                    df_temp_1.loc[:, key_temp] = new_seq_list
-                df_list.append(df_temp_1)
-        df_HQ = pd.concat(df_list)
+                    df_temp[key_temp][sp_idx] = new_seq_list
+                    df_temp[key_temp][~sp_idx] = np.nan
+            df_list.append(df_temp)
+        df_HQ = pd.concat(df_list).dropna()
     else:
-        df_HQ = df_input[(df_input.read >= base_read_cutoff)]
-        for key_temp in target_keys:
+        for j, key_temp in enumerate(target_keys):
+            sp_idx = df_input.read >= base_read_cutoff[j]
             print(
-                f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_HQ[key_temp]))}"
+                f"Currently cleaning {key_temp}; number of unique elements: {len(set(df_input[key_temp][sp_idx]))}"
             )
-            clustered_umis, umi_count, new_seq_list = denoise_sequence(
-                df_HQ[key_temp], threshold=threshold
+            mapping, new_seq_list = denoise_sequence(
+                df_input[sp_idx][key_temp], threshold=threshold[j]
             )
-            df_HQ[key_temp] = new_seq_list
+            df_input[key_temp][sp_idx] = new_seq_list
+            df_input[key_temp][~sp_idx] = np.nan
             print(
-                f"Number of unique elements (after cleaning): {len(set(df_HQ[key_temp]))}"
+                f"Number of unique elements (after cleaning): {len(set(new_seq_list))}"
             )
+        df_HQ = df_input.dropna()
 
-    df_out = df_HQ.groupby(["library", "cell_id", "clone_id"]).sum("read")
-    df_out["umi_count"] = (
-        df_HQ.groupby(["library", "cell_id", "clone_id"])["umi"].count().values
-    )
+    return df_HQ
+
+
+def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
+    df_out = df_HQ.groupby(group_keys).sum("read")
+    df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
     df_out = df_out.reset_index()
     return df_out
 
 
-def denoise_sequence(seq_list, threshold=None):
-    seq_list = np.array(seq_list).astype(bytes)
-    if threshold is None:
-        threshold = round(0.1 * len(seq_list[0]))
-    print(f"Sequences within Hamming distance {threshold} are connected")
-    umi_count = {xx: np.sum(seq_list == xx) for xx in set(seq_list)}
+def denoise_sequence(
+    input_seqs, distance_threshold=1, method="UMI_tools", whiteList=None
+):
+    """
+    method="distance", or "UMI_tools"
 
-    clusterer = UMIClusterer(cluster_method="directional")
-    clustered_umis = clusterer(umi_count, threshold=threshold)
-    correction_dict = {}
-    for umi_list in clustered_umis:
-        for umi in umi_list:
-            correction_dict[umi] = umi_list[0]
+    seq_list: can be a list with duplicate sequences, indicating the read abundance of the read
 
-    new_seq_list = [correction_dict[xx] for xx in seq_list]
-    return correction_dict, umi_count, np.array(new_seq_list).astype(str)
+    Note that the output seq list could contain 'nan' if whitelist is used
+    """
+    seq_list = np.array(input_seqs).astype(bytes)
+    df = pd.DataFrame({"seq": seq_list, "read": np.ones(len(seq_list))})
+    df = (
+        df.groupby("seq").sum("read").reset_index().sort_values("read", ascending=False)
+    )
+    if method == "UMI_tools":
+        if whiteList is not None:
+            raise ValueError("whitelist is not compatible with method=UMI_tools")
+        seq_count = {df["seq"].iloc[j]: df["read"].iloc[j] for j in range(len(df))}
+        if distance_threshold is None:
+            distance_threshold = round(0.1 * len(seq_list[0]))
+        print(f"Sequences within Hamming distance {distance_threshold} are connected")
+
+        clusterer = UMIClusterer(cluster_method="directional")
+        clustered_umis = clusterer(seq_count, threshold=distance_threshold)
+        mapping = {}
+        for umi_list in clustered_umis:
+            for umi in umi_list:
+                mapping[umi] = umi_list[0]
+    else:
+        print(f"Sequences within Hamming distance {distance_threshold} are connected")
+        # quality_seq_list = []
+        mapping = {}
+        unique_seq_list = list(df["seq"])
+        print(f"Processing {len(unique_seq_list)} unique sequences")
+        remaining_seq_idx = np.ones(len(unique_seq_list)).astype(bool)
+        source_seqs = np.array([list(xx) for xx in unique_seq_list])
+        if whiteList is None:
+            for __ in tqdm(range(len(unique_seq_list))):
+                cur_ids = np.nonzero(remaining_seq_idx)[0]
+                id_0 = cur_ids[0]
+                cur_seq = unique_seq_list[id_0]
+                remain_seq_array = source_seqs[remaining_seq_idx]
+                distance_vector = np.sum(remain_seq_array != remain_seq_array[0], 1)
+                target_ids = np.nonzero(distance_vector < distance_threshold)[0]
+                for k in target_ids:
+                    abs_id = cur_ids[k]
+                    seq_tmp = unique_seq_list[abs_id]
+                    mapping[seq_tmp] = cur_seq
+                    remaining_seq_idx[
+                        abs_id
+                    ] = False  # switch to idx to prevent modifying id list dynamically
+
+                if np.sum(remaining_seq_idx) <= 0:
+                    break
+        else:
+            whiteList_1 = np.array(whiteList).astype(bytes)
+            target_seqs = np.array([list(xx) for xx in whiteList_1])
+            for j in tqdm(range(len(whiteList_1))):
+                cur_seq = whiteList_1[j]
+                cur_ids = np.nonzero(remaining_seq_idx)[0]
+                remain_seq_array = source_seqs[remaining_seq_idx]
+                distance_vector = np.sum(remain_seq_array != target_seqs[j], 1)
+                target_ids = np.nonzero(distance_vector < distance_threshold)[0]
+                for k in target_ids:
+                    abs_id = cur_ids[k]
+                    seq_tmp = unique_seq_list[abs_id]
+                    mapping[seq_tmp] = cur_seq
+                    remaining_seq_idx[
+                        abs_id
+                    ] = False  # switch to idx to prevent modifying id list dynamically
+
+    if whiteList is None:
+        new_seq_list = np.array([mapping[xx] for xx in seq_list]).astype(str)
+    else:
+        shared_idx = np.in1d(seq_list, list(mapping.keys()))
+        new_seq_list = np.array(seq_list).copy()
+        new_seq_list[shared_idx] = [mapping[xx] for xx in seq_list[shared_idx]]
+        new_seq_list = np.array(new_seq_list).astype(str)
+        new_seq_list[~shared_idx] = np.nan
+
+    return mapping, new_seq_list
 
 
 def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=False):
@@ -368,3 +441,25 @@ def remove_cells(
         df_clone_N = df_clone_N[df_clone_N["clone_size"] <= clone_size_cutoff]
         df_out = df_out[df_out.clone_id.isin(df_clone_N["clone_id"])]
     return df_out
+
+
+def rename_library_info(df_all, mapping_dictionary):
+    """
+    Mapping one library name into another.
+
+    As an example:
+    mapping_dictionary={'LARRY_Lime_33':'Lime_RNA_101','LARRY_Lime_34':'Lime_RNA_102', 'LARRY_Lime_35':'Lime_RNA_103',
+                   'LARRY_Lime_36':'Lime_RNA_104','LARRY_10X_31':'MPP_10X_A3_1', 'LARRY_10X_32':'MPP_10X_A4_1'}
+    """
+
+    new_id_list = []
+    for j in tqdm(range(len(df_all))):
+        xx = df_all["cell_id"].iloc[j]
+        lib = "_".join(xx.split("_")[:3])
+        new_lib = mapping_dictionary[lib]
+        bc = xx.split("_")[3]
+        new_id = new_lib + "_" + bc
+        new_id_list.append(new_id)
+    df_new = df_all.copy()
+    df_new["cell_id"] = new_id_list
+    return df_new
