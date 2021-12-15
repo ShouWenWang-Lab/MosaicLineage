@@ -67,6 +67,7 @@ def denoise_clonal_data(
                     read_cout=df_temp[sp_idx]["read"],
                     distance_threshold=distance_threshold,
                     method=denoise_method,
+                    progress_bar=False,
                 )
                 df_temp[target_key][sp_idx] = new_seq_list
                 df_temp[target_key][~sp_idx] = np.nan
@@ -102,14 +103,14 @@ def denoise_clonal_data(
         f"Retained read fraction (above cutoff {base_read_cutoff}): {read_fraction_cutoff:.2f}"
     )
 
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     distance = QC_sequence_distance(unique_seq)
-    min_dis = plot_seq_distance(distance)
+    min_dis = plot_seq_distance(distance, ax=axs[0])
 
-    fig, ax = plt.subplots()
     df_out = group_cells(df_HQ, group_keys=[target_key])
-    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=True)
+    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=False, ax=axs[1])
     ax.set_xlabel(f"Total read of corrected {target_key}")
-    ax.set_ylabel(f"Cumulative counts")
+    ax.set_ylabel(f"Counts")
     return df_HQ
 
 
@@ -121,7 +122,12 @@ def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
 
 
 def denoise_sequence(
-    input_seqs, read_cout=None, distance_threshold=1, method="Hamming", whiteList=None
+    input_seqs,
+    read_cout=None,
+    distance_threshold=1,
+    method="Hamming",
+    whiteList=None,
+    progress_bar=True,
 ):
     """
     Take the sequences, make a unique list, and order them by read count. The input_seqs does not need
@@ -151,7 +157,11 @@ def denoise_sequence(
         seq_count = {df["seq"].iloc[j]: df["read"].iloc[j] for j in range(len(df))}
         if distance_threshold is None:
             distance_threshold = round(0.1 * len(seq_list[0]))
-        print(f"Sequences within Hamming distance {distance_threshold} are connected")
+
+        if progress_bar:
+            print(
+                f"Sequences within Hamming distance {distance_threshold} are connected"
+            )
 
         clusterer = UMIClusterer(cluster_method="directional")
         clustered_umis = clusterer(seq_count, threshold=distance_threshold)
@@ -160,15 +170,22 @@ def denoise_sequence(
             for umi in umi_list:
                 mapping[umi] = umi_list[0]
     else:  # "Hamming"
-        print(f"Sequences within Hamming distance {distance_threshold} are connected")
+        if progress_bar:
+            print(
+                f"Sequences within Hamming distance {distance_threshold} are connected"
+            )
         # quality_seq_list = []
         mapping = {}
         unique_seq_list = list(df["seq"])
-        print(f"Processing {len(unique_seq_list)} unique sequences")
+        if progress_bar:
+            print(f"Processing {len(unique_seq_list)} unique sequences")
         remaining_seq_idx = np.ones(len(unique_seq_list)).astype(bool)
         source_seqs = np.array([list(xx) for xx in unique_seq_list])
         if whiteList is None:
-            for __ in tqdm(range(len(unique_seq_list))):
+            iter = range(len(unique_seq_list))
+            if progress_bar:
+                iter = tqdm(iter)
+            for __ in iter:
                 cur_ids = np.nonzero(remaining_seq_idx)[0]
                 id_0 = cur_ids[0]
                 cur_seq = unique_seq_list[id_0]
@@ -188,7 +205,10 @@ def denoise_sequence(
         else:
             whiteList_1 = np.array(whiteList).astype(bytes)
             target_seqs = np.array([list(xx) for xx in whiteList_1])
-            for j in tqdm(range(len(whiteList_1))):
+            iter = range(len(whiteList_1))
+            if progress_bar:
+                iter = tqdm(iter)
+            for j in iter:
                 cur_seq = whiteList_1[j]
                 cur_ids = np.nonzero(remaining_seq_idx)[0]
                 remain_seq_array = source_seqs[remaining_seq_idx]
@@ -250,13 +270,10 @@ def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=
     return distance
 
 
-def plot_seq_distance(distance, log_scale=True):
+def plot_seq_distance(distance, **kwargs):
     np.fill_diagonal(distance, np.inf)
-    fig, ax = plt.subplots()
     min_distance = distance.min(axis=1)
-    sns.histplot(min_distance, bins=100, ax=ax)
-    if log_scale:
-        plt.yscale("log")
+    ax = sns.histplot(min_distance, **kwargs)
     ax.set_xlabel("Minimum intra-seq hamming distance")
     return min_distance
 
@@ -273,50 +290,42 @@ def seq_partition(n, seq):
         return ["".join(x) for x in tz.partition(n, seq)]
 
 
-def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True):
+def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
     """
     Get Number of clonal bc per cell
     """
-    clonal_bc_N = []
-    tot_read = []
-    bc_list = []
     df = df0[df0["read"] >= read_cutoff]
-    for bc in list(set(df["cell_id"])):
-        df_temp = df[df.cell_id.isin([bc])]
-        if len(df_temp) > 0:
-            clonall_bc_N_temp = len(set(df_temp["clone_id"]))
-            clonal_bc_N.append(clonall_bc_N_temp)
-            bc_list.append(bc)
-            tot_read.append(df_temp["read"].sum())
-
-    df_statis = pd.DataFrame(
-        {"cell_id": bc_list, "tot_read": tot_read, "clonal_bc_number": clonal_bc_N}
+    df_statis = (
+        df.groupby(["cell_id"])
+        .apply(lambda x: len(set(x["clone_id"])))
+        .to_frame(name="clonal_bc_number")
+        .reset_index()
     )
     if plot:
-        ax = sns.histplot(data=df_statis, x="clonal_bc_number")
+        ax = sns.histplot(data=df_statis, x="clonal_bc_number", **kwargs)
         ax.set_xlabel("Number of clonal bc per cell")
         ax.set_ylabel("Count")
     return df_statis
 
 
-def QC_clone_size(df0, read_cutoff=3, log_scale=False, plot=True):
-    clone_size = []
-    bc_list = []
-    df = df0[df0["read"] >= read_cutoff]
-    for bc in list(set(df["clone_id"])):
-        df_temp = df[df.clone_id.isin([bc])]
-        clone_size_temp = len(set(df_temp["cell_id"]))
-        clone_size.append(clone_size_temp)
-        bc_list.append(bc)
+def QC_clonal_reports(df, **kwargs):
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+    QC_clone_size(df, read_cutoff=0, ax=axs[0], **kwargs)
+    QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
 
-    df_statis = pd.DataFrame({"clone_id": bc_list, "clone_size": clone_size})
+
+def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
+    df = df0[df0["read"] >= read_cutoff]
+    df_statis = (
+        df.groupby("clone_id")
+        .apply(lambda x: len(set(x["cell_id"])))
+        .to_frame(name="clone_size")
+        .reset_index()
+    )
     if plot:
-        ax = sns.histplot(data=df_statis, x="clone_size")
+        ax = sns.histplot(data=df_statis, x="clone_size", **kwargs)
         ax.set_xlabel("Clone size")
         ax.set_ylabel("Count")
-        if log_scale:
-            plt.xscale("log")
-            plt.yscale("log")
     return df_statis
 
 
@@ -465,11 +474,10 @@ def print_statistics(df, read_cutoff=None):
         df_tmp = df[df.read >= read_cutoff]
     else:
         df_tmp = df
-    print(
-        f"Current cell number: {len(set(df_tmp['cell_id']))}\n"
-        f"current clone number: {len(set(df_tmp['clone_id']))}\n"
-        f"total reads: {np.sum(df_tmp['read'])/1000:.0f}K\n"
-    )
+    for key in ["library", "cell_id", "clone_id", "umi_id"]:
+        if key in df.columns:
+            print(f"{key} number: {len(set(df_tmp[key]))}")
+    print(f"total reads: {np.sum(df_tmp['read'])/1000:.0f}K")
 
 
 def remove_cells(
@@ -509,3 +517,25 @@ def rename_library_info(df_all, mapping_dictionary):
         df_all["library"][df_all.library == key] = mapping_dictionary[key]
     df_all.loc[:, "cell_id"] = df_all["library"] + "_" + df_all["cell_bc"]
     return df_all
+
+
+def merge_adata_across_times(
+    adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scLimeCat"
+):
+    adata_t1_ = adata_t1.raw.to_adata()
+    adata_t2_ = adata_t2.raw.to_adata()
+    adata_t1_.obsm[embed_key] = adata_t1_.obsm[embed_key] + X_shift
+
+    adata_t1_.obs["time_info"] = ["1" for x in range(adata_t1_.shape[0])]
+    adata_t2_.obs["time_info"] = ["2" for x in range(adata_t2_.shape[0])]
+
+    adata_t1_.obs["leiden"] = [f"t1_{x}" for x in adata_t1_.obs["leiden"]]
+    adata_t2_.obs["leiden"] = [f"t2_{x}" for x in adata_t2_.obs["leiden"]]
+
+    adata = adata_t1_.concatenate(adata_t2_, join="outer")
+    adata.obs_names = [
+        xx.split("-")[0] for xx in adata.obs_names
+    ]  # we assume the names are unique
+    adata.obsm["X_emb"] = adata.obsm[embed_key]
+    adata.uns["data_des"] = [data_des]
+    return adata
