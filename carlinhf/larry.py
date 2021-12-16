@@ -17,7 +17,7 @@ def denoise_clonal_data(
     df_raw,
     target_key="clone_id",
     base_read_cutoff=3,
-    per_cell=False,
+    per_sample=None,
     denoise_method="Hamming",
     distance_threshold=None,
     whiteList=None,
@@ -36,7 +36,8 @@ def denoise_clonal_data(
     denoise_method:
         "Hamming", or "UMI_tools". The "Hamming" method works better.
     per_cell:
-        denoise for each cell sepaerately, where we adjust the read threshold per cell
+        denoise for each sample sepaerately, where we adjust the read threshold per sample.
+        This can be cell or library.  The right input could be: None, 'cell_id', 'library'
     distance_threshold:
         distances to connect two sequences.
     whiteList:
@@ -50,25 +51,31 @@ def denoise_clonal_data(
     """
 
     df_input = df_raw.copy()
-    if per_cell:
-        cell_id_list = list(set(df_input["cell_id"]))
+    if (per_sample is not None) and (per_sample in df_input.columns):
+        cell_id_list = list(set(df_input[per_sample]))
         df_list = []
         for j in tqdm(range(len(cell_id_list))):
             cell_id_temp = cell_id_list[j]
-            df_temp = df_input[df_input["cell_id"] == cell_id_temp]
+            df_temp = df_input[df_input[per_sample] == cell_id_temp]
 
-            read_cutoff = np.max(
-                [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
-            )
+            # read_cutoff = np.max(
+            #     [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
+            # )
+            read_cutoff = base_read_cutoff
             sp_idx = df_temp["read"] >= read_cutoff
+            print(
+                f"Currently cleaning {target_key}; number of unique elements: {len(set(df_temp[target_key][sp_idx]))}"
+            )
             if np.sum(sp_idx) > 0:
                 mapping, new_seq_list = denoise_sequence(
                     df_temp[sp_idx][target_key],
                     read_cout=df_temp[sp_idx]["read"],
                     distance_threshold=distance_threshold,
+                    whiteList=whiteList,
                     method=denoise_method,
                     progress_bar=False,
                 )
+
                 df_temp[target_key][sp_idx] = new_seq_list
                 df_temp[target_key][~sp_idx] = np.nan
                 df_temp[target_key][df_temp[target_key] == "nan"] = np.nan
@@ -106,12 +113,16 @@ def denoise_clonal_data(
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     distance = QC_sequence_distance(unique_seq)
     min_dis = plot_seq_distance(distance, ax=axs[0])
+    read_coverage(df_HQ, target_key=target_key, ax=axs[1])
+    return df_HQ
 
-    df_out = group_cells(df_HQ, group_keys=[target_key])
-    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=False, ax=axs[1])
+
+def read_coverage(df, target_key="clone_id", **kwargs):
+    df_out = group_cells(df, group_keys=[target_key])
+    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=False, **kwargs)
     ax.set_xlabel(f"Total read of corrected {target_key}")
     ax.set_ylabel(f"Counts")
-    return df_HQ
+    return ax
 
 
 def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
@@ -308,10 +319,13 @@ def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_clonal_reports(df, **kwargs):
+def QC_clonal_reports(df, title=None, **kwargs):
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     QC_clone_size(df, read_cutoff=0, ax=axs[0], **kwargs)
     QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
+    if title is not None:
+        fig.suptitle(title, fontsize=16)
+    return fig
 
 
 def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
