@@ -50,12 +50,17 @@ def denoise_clonal_data(
     """
 
     df_input = df_raw.copy()
+    sp_idx_0 = df_input["read"] >= read_cutoff
+    print(
+        f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx_0]))}"
+    )
     if (per_sample is not None) and (per_sample in df_input.columns):
-        cell_id_list = list(set(df_input[per_sample]))
+        print(f"Denoising mode: per {per_sample}")
+        sample_id_list = list(set(df_input[per_sample]))
         df_list = []
-        for j in tqdm(range(len(cell_id_list))):
-            cell_id_temp = cell_id_list[j]
-            df_temp = df_input[df_input[per_sample] == cell_id_temp]
+        for j in tqdm(range(len(sample_id_list))):
+            sample_id_temp = sample_id_list[j]
+            df_temp = df_input[df_input[per_sample] == sample_id_temp]
 
             sp_idx = df_temp["read"] >= read_cutoff
             if np.sum(sp_idx) > 0:
@@ -75,9 +80,6 @@ def denoise_clonal_data(
         df_HQ = pd.concat(df_list).dropna()
     else:
         sp_idx = df_input.read >= read_cutoff
-        print(
-            f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx]))}"
-        )
         mapping, new_seq_list = denoise_sequence(
             df_input[sp_idx][target_key],
             read_count=df_input[sp_idx]["read"],
@@ -90,12 +92,13 @@ def denoise_clonal_data(
         df_input[target_key][df_input[target_key] == "nan"] = np.nan
         df_HQ = df_input.dropna()
 
+    df_HQ_1 = group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id", "umi"])
     ## report
-    unique_seq = list(set(df_HQ[target_key]))
+    unique_seq = list(set(df_HQ_1[target_key]))
     print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
-    read_fraction_all = df_HQ["read"].sum() / df_raw["read"].sum()
+    read_fraction_all = df_HQ_1["read"].sum() / df_raw["read"].sum()
     read_fraction_cutoff = (
-        df_HQ["read"].sum() / df_raw[df_raw["read"] >= read_cutoff]["read"].sum()
+        df_HQ_1["read"].sum() / df_raw[df_raw["read"] >= read_cutoff]["read"].sum()
     )
     print(f"Retained read fraction (above cutoff 0): {read_fraction_all:.2f}")
     print(
@@ -106,20 +109,21 @@ def denoise_clonal_data(
     distance = QC_sequence_distance(unique_seq)
     min_dis = plot_seq_distance(distance, ax=axs[0])
     read_coverage(df_HQ, target_key=target_key, ax=axs[1])
-    return df_HQ
+    return df_HQ_1
 
 
-def read_coverage(df, target_key="clone_id", **kwargs):
+def read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
     df_out = group_cells(df, group_keys=[target_key])
-    ax = sns.histplot(df_out["read"], log_scale=True, cumulative=False, **kwargs)
+    ax = sns.histplot(df_out["read"], log_scale=log_scale, cumulative=False, **kwargs)
     ax.set_xlabel(f"Total read of corrected {target_key}")
     ax.set_ylabel(f"Counts")
     return ax
 
 
-def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
+def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=True):
     df_out = df_HQ.groupby(group_keys).sum("read")
-    df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
+    if ("umi" not in group_keys) and count_UMI:
+        df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
     df_out = df_out.reset_index()
     return df_out
 
@@ -137,6 +141,8 @@ def denoise_sequence(
     to be unique. We will aggregate the read count for the same sequence. From top to bottom, we iteratively find its similar sequences in the rest of the sequence pool, and remove them.
 
     Note that the output seq list could contain 'nan' if whitelist is used
+
+    sequence distance <= 'distance_threshold' are connected
 
     Parameters:
     -----------
@@ -213,17 +219,20 @@ def denoise_sequence(
                 iter = tqdm(iter)
             for j in iter:
                 cur_seq = whiteList_1[j]
-                cur_ids = np.nonzero(remaining_seq_idx)[0]
-                remain_seq_array = source_seqs[remaining_seq_idx]
-                distance_vector = np.sum(remain_seq_array != target_seqs[j], 1)
-                target_ids = np.nonzero(distance_vector <= distance_threshold)[0]
-                for k in target_ids:
-                    abs_id = cur_ids[k]
-                    seq_tmp = unique_seq_list[abs_id]
-                    mapping[seq_tmp] = cur_seq
-                    remaining_seq_idx[
-                        abs_id
-                    ] = False  # switch to idx to prevent modifying id list dynamically
+                if distance_threshold > 0:
+                    cur_ids = np.nonzero(remaining_seq_idx)[0]
+                    remain_seq_array = source_seqs[remaining_seq_idx]
+                    distance_vector = np.sum(remain_seq_array != target_seqs[j], 1)
+                    target_ids = np.nonzero(distance_vector <= distance_threshold)[0]
+                    for k in target_ids:
+                        abs_id = cur_ids[k]
+                        seq_tmp = unique_seq_list[abs_id]
+                        mapping[seq_tmp] = cur_seq
+                        remaining_seq_idx[
+                            abs_id
+                        ] = False  # switch to idx to prevent modifying id list dynamically
+                else:
+                    mapping[cur_seq] = cur_seq
 
     if whiteList is None:
         new_seq_list = np.array([mapping[xx] for xx in seq_list]).astype(str)
@@ -317,7 +326,6 @@ def QC_clonal_reports(df, title=None, **kwargs):
     QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
     if title is not None:
         fig.suptitle(title, fontsize=16)
-    return fig
 
 
 def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
