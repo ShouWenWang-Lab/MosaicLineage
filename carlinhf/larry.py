@@ -16,12 +16,11 @@ from umi_tools import UMIClusterer
 def denoise_clonal_data(
     df_raw,
     target_key="clone_id",
-    base_read_cutoff=3,
+    read_cutoff=3,
     per_sample=None,
     denoise_method="Hamming",
     distance_threshold=None,
     whiteList=None,
-    read_cutoff_ratio=0.5,
 ):
     """
     Denoise sequencing/PCR errors at a particular field.
@@ -58,18 +57,11 @@ def denoise_clonal_data(
             cell_id_temp = cell_id_list[j]
             df_temp = df_input[df_input[per_sample] == cell_id_temp]
 
-            # read_cutoff = np.max(
-            #     [base_read_cutoff, read_cutoff_ratio * np.max(df_temp["read"])]
-            # )
-            read_cutoff = base_read_cutoff
             sp_idx = df_temp["read"] >= read_cutoff
-            print(
-                f"Currently cleaning {target_key}; number of unique elements: {len(set(df_temp[target_key][sp_idx]))}"
-            )
             if np.sum(sp_idx) > 0:
                 mapping, new_seq_list = denoise_sequence(
                     df_temp[sp_idx][target_key],
-                    read_cout=df_temp[sp_idx]["read"],
+                    read_count=df_temp[sp_idx]["read"],
                     distance_threshold=distance_threshold,
                     whiteList=whiteList,
                     method=denoise_method,
@@ -82,13 +74,13 @@ def denoise_clonal_data(
             df_list.append(df_temp)
         df_HQ = pd.concat(df_list).dropna()
     else:
-        sp_idx = df_input.read >= base_read_cutoff
+        sp_idx = df_input.read >= read_cutoff
         print(
             f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx]))}"
         )
         mapping, new_seq_list = denoise_sequence(
             df_input[sp_idx][target_key],
-            read_cout=df_input[sp_idx]["read"],
+            read_count=df_input[sp_idx]["read"],
             distance_threshold=distance_threshold,
             whiteList=whiteList,
             method=denoise_method,
@@ -103,11 +95,11 @@ def denoise_clonal_data(
     print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
     read_fraction_all = df_HQ["read"].sum() / df_raw["read"].sum()
     read_fraction_cutoff = (
-        df_HQ["read"].sum() / df_raw[df_raw["read"] >= base_read_cutoff]["read"].sum()
+        df_HQ["read"].sum() / df_raw[df_raw["read"] >= read_cutoff]["read"].sum()
     )
     print(f"Retained read fraction (above cutoff 0): {read_fraction_all:.2f}")
     print(
-        f"Retained read fraction (above cutoff {base_read_cutoff}): {read_fraction_cutoff:.2f}"
+        f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
     )
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
@@ -134,7 +126,7 @@ def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"]):
 
 def denoise_sequence(
     input_seqs,
-    read_cout=None,
+    read_count=None,
     distance_threshold=1,
     method="Hamming",
     whiteList=None,
@@ -154,11 +146,11 @@ def denoise_sequence(
         can be a list with duplicate sequences, indicating the read abundance of the read
     """
     seq_list = np.array(input_seqs).astype(bytes)
-    if read_cout is None:
+    if read_count is None:
         read_count = np.ones(len(seq_list))
-    if len(read_cout) != len(input_seqs):
+    if len(read_count) != len(input_seqs):
         raise ValueError("read_count does not have the same size as input_seqs")
-    df = pd.DataFrame({"seq": seq_list, "read": read_cout})
+    df = pd.DataFrame({"seq": seq_list, "read": read_count})
     df = (
         df.groupby("seq").sum("read").reset_index().sort_values("read", ascending=False)
     )
@@ -202,7 +194,7 @@ def denoise_sequence(
                 cur_seq = unique_seq_list[id_0]
                 remain_seq_array = source_seqs[remaining_seq_idx]
                 distance_vector = np.sum(remain_seq_array != remain_seq_array[0], 1)
-                target_ids = np.nonzero(distance_vector < distance_threshold)[0]
+                target_ids = np.nonzero(distance_vector <= distance_threshold)[0]
                 for k in target_ids:
                     abs_id = cur_ids[k]
                     seq_tmp = unique_seq_list[abs_id]
@@ -224,7 +216,7 @@ def denoise_sequence(
                 cur_ids = np.nonzero(remaining_seq_idx)[0]
                 remain_seq_array = source_seqs[remaining_seq_idx]
                 distance_vector = np.sum(remain_seq_array != target_seqs[j], 1)
-                target_ids = np.nonzero(distance_vector < distance_threshold)[0]
+                target_ids = np.nonzero(distance_vector <= distance_threshold)[0]
                 for k in target_ids:
                     abs_id = cur_ids[k]
                     seq_tmp = unique_seq_list[abs_id]
