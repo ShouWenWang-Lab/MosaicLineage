@@ -29,6 +29,36 @@ def generate_adata_v0(X_clone, state_info=None):
     return adata_orig
 
 
+def generate_adata_sample_by_allele(df_data, use_UMI=True):
+    all_mutation = np.array(list(set(df_data["allele"])))
+    all_cells = np.array(list(set(df_data["sample"])))
+    X_clone = np.zeros((len(all_cells), len(all_mutation)))
+    for i, xx in enumerate(df_data["allele"]):
+        yy = df_data.iloc[i]["sample"]
+        idx_1 = np.nonzero(all_cells == yy)[0]
+        idx_2 = np.nonzero(all_mutation == xx)[0]
+        X_clone[idx_1, idx_2] = df_data.iloc[i][
+            "obs_UMI_count"
+        ]  # This keeps the count information, and works better
+        # X_clone[i,idx]=1
+
+    X_clone = ssp.csr_matrix(X_clone)
+    adata_orig = sc.AnnData(X_clone)
+    adata_orig.var_names = all_mutation
+    adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
+    adata_orig.obs["state_info"] = all_cells
+    adata_orig.obsm["X_clone"] = X_clone
+    adata_orig.uns["data_des"] = ["hi"]
+    if "expected_frequency" in df_data.keys():
+        adata_orig.uns["expected_frequency"] = np.array(df_data["expected_frequency"])
+    adata_orig.uns["obs_UMI_count"] = np.array(df_data["obs_UMI_count"])
+
+    if "mouse" in df_data.keys():
+        adata_orig.uns["mouse"] = np.array(df_data["mouse"])
+
+    return adata_orig
+
+
 def generate_adata(df_data, use_np_array=False, use_UMI=True):
     all_mutation = []
     for xx in df_data["allele"]:
@@ -516,3 +546,54 @@ def clonal_analysis(
             figure_path=cs.settings.figure_path,
             dpi=300,
         )
+
+
+def get_fate_count_coupling(X_clone):
+    """
+    X_clone:
+        should be a coarse-grained X_clone: cell_type by clones
+        Numpy array
+    """
+    fate_N = X_clone.shape[0]
+    X_count = np.zeros((fate_N, fate_N))
+    for i in range(fate_N):
+        for j in range(fate_N):
+            X_count[i, j] = np.sum((X_clone[i, :] > 0) & (X_clone[j, :] > 0))
+
+    norm_X_count = X_count.copy()
+    for i in range(fate_N):
+        norm_X_count[i, :] = X_count[i, :] / X_count[i, i]
+    return X_count, norm_X_count
+
+
+def conditional_heatmap(
+    coarse_X_clone,
+    fate_names: list,
+    included_fates: list = None,
+    excluded_fates: list = None,
+    plot=True,
+    **kwargs,
+):
+    fate_names = np.array(fate_names)
+    valid_clone_idx = np.ones(coarse_X_clone.shape[1]).astype(bool)
+    if included_fates is not None:
+        for x_name in included_fates:
+            valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+            valid_clone_idx = valid_clone_idx & valid_clone_idx_tmp
+
+    if excluded_fates is not None:
+        for x_name in excluded_fates:
+            valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+            valid_clone_idx = valid_clone_idx & ~valid_clone_idx_tmp
+
+    new_matrix = coarse_X_clone[:, valid_clone_idx]
+    X_count, norm_X_count = get_fate_count_coupling(new_matrix)
+    if plot:
+        cs.pl.heatmap(
+            new_matrix.T,
+            order_map_x=False,
+            x_ticks=fate_names,
+            **kwargs,
+        )
+        plt.title(f"{np.sum(valid_clone_idx)} clones")
+    return X_count, norm_X_count
