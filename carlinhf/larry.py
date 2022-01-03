@@ -21,6 +21,7 @@ def denoise_clonal_data(
     denoise_method="Hamming",
     distance_threshold=None,
     whiteList=None,
+    plot_report=True,
 ):
     """
     Denoise sequencing/PCR errors at a particular field.
@@ -93,6 +94,7 @@ def denoise_clonal_data(
         df_HQ = df_input.dropna()
 
     df_HQ_1 = group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id", "umi"])
+
     ## report
     unique_seq = list(set(df_HQ_1[target_key]))
     print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
@@ -104,11 +106,12 @@ def denoise_clonal_data(
     print(
         f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
     )
+    if plot_report:
+        fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+        distance = QC_sequence_distance(unique_seq)
+        min_dis = plot_seq_distance(distance, ax=axs[0])
+        read_coverage(df_HQ, target_key=target_key, ax=axs[1])
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-    distance = QC_sequence_distance(unique_seq)
-    min_dis = plot_seq_distance(distance, ax=axs[0])
-    read_coverage(df_HQ, target_key=target_key, ax=axs[1])
     return df_HQ_1
 
 
@@ -320,12 +323,17 @@ def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_clonal_reports(df, title=None, **kwargs):
+def QC_clonal_reports(
+    df, title=None, file_path=None, data_des="", save=False, **kwargs
+):
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     QC_clone_size(df, read_cutoff=0, ax=axs[0], **kwargs)
     QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
     if title is not None:
         fig.suptitle(title, fontsize=16)
+    if save:
+        plt.tight_layout()
+        fig.savefig(os.path.join(file_path, "clonal_reports" + data_des + ".pdf"))
 
 
 def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
