@@ -118,22 +118,58 @@ def custom_conditional_heatmap(
 
     short_fate_names = [x.split("-")[-1] for x in fate_names]
     for j, temp_idx in enumerate(temp_idx_list):
-        new_matrix = coarse_X_clone[:, temp_idx]
-        if new_matrix.shape[1] > 0:
-            X_count, norm_X_count = lineage.get_fate_count_coupling(new_matrix)
-            if (j == len(temp_idx_list) - 1) and final_x_ticks:
-                x_ticks = fate_names
-            else:
-                x_ticks = None
-            cs.pl.heatmap(
-                new_matrix.T,
-                order_map_x=False,
-                order_map_y=True,
-                x_ticks=x_ticks,
-                log_transform=True,
-                fig_width=10,
-                fig_height=1,
-            )
-            plt.title(
-                f"{np.sum(temp_idx)} clones; {short_fate_names[3]} {norm_X_count[sel_id,3]:.2f}; {short_fate_names[4]} {norm_X_count[sel_id,4]:.2f}; {short_fate_names[5]} {norm_X_count[sel_id,5]:.2f} {short_fate_names[6]} {norm_X_count[sel_id,6]:.2f}; {short_fate_names[7]} {norm_X_count[sel_id,7]:.2f}"
-            )
+        if np.sum(temp_idx) == 0:
+            new_matrix = np.zeros((coarse_X_clone.shape[0], 1))
+        else:
+            new_matrix = coarse_X_clone[:, temp_idx]
+        X_count, norm_X_count = lineage.get_fate_count_coupling(new_matrix)
+        if (j == len(temp_idx_list) - 1) and final_x_ticks:
+            x_ticks = fate_names
+        else:
+            x_ticks = None
+        cs.pl.heatmap(
+            new_matrix.T,
+            order_map_x=False,
+            order_map_y=True,
+            x_ticks=x_ticks,
+            log_transform=True,
+            fig_width=10,
+            fig_height=1,
+        )
+        plt.title(
+            f"{np.sum(temp_idx)} clones; {short_fate_names[3]} {norm_X_count[sel_id,3]:.2f}; {short_fate_names[4]} {norm_X_count[sel_id,4]:.2f}; {short_fate_names[5]} {norm_X_count[sel_id,5]:.2f} {short_fate_names[6]} {norm_X_count[sel_id,6]:.2f}; {short_fate_names[7]} {norm_X_count[sel_id,7]:.2f}"
+        )
+
+
+def custom_fate_bias_heatmap(
+    coarse_X_clone,
+    fate_names,
+    conditional_fates=["LL405-E5-LT-HSC", "LL405-E5-ST-HSC", "LL405-E5-MPP3-4"],
+):
+    custom_conditional_heatmap(
+        coarse_X_clone,
+        fate_names,
+        target_fate=conditional_fates[0],
+        conditional_fates=conditional_fates[1:],
+        only_LK=True,
+        final_x_ticks=False,
+        exclude_fates=None,
+    )
+    custom_conditional_heatmap(
+        coarse_X_clone,
+        fate_names,
+        target_fate=conditional_fates[1],
+        conditional_fates=conditional_fates[2:],
+        only_LK=True,
+        final_x_ticks=False,
+        exclude_fates=[conditional_fates[0]],
+    )
+    custom_conditional_heatmap(
+        coarse_X_clone,
+        fate_names,
+        target_fate=conditional_fates[2],
+        conditional_fates=[],
+        only_LK=True,
+        final_x_ticks=True,
+        exclude_fates=conditional_fates[:2],
+    )
