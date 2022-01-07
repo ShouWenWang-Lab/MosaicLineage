@@ -574,6 +574,10 @@ def conditional_heatmap(
     plot=True,
     **kwargs,
 ):
+    """
+
+    log_transform: True or False
+    """
     fate_names = np.array(fate_names)
     valid_clone_idx = np.ones(coarse_X_clone.shape[1]).astype(bool)
     if included_fates is not None:
@@ -588,6 +592,9 @@ def conditional_heatmap(
 
     new_matrix = coarse_X_clone[:, valid_clone_idx]
     X_count, norm_X_count = get_fate_count_coupling(new_matrix)
+
+    for j, x in enumerate(fate_names):
+        print(f"Clone # ({x}): {(new_matrix>0).sum(1)[j]:.2f}")
     if plot:
         cs.pl.heatmap(
             new_matrix.T,

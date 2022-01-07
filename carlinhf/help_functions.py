@@ -16,6 +16,36 @@ from scipy.io import loadmat
 from . import larry, lineage
 
 
+def load_all_samples_to_adata(
+    SampleList, file_path, df_ref, frequuency_cutoff=10 ** (-4), mode="allele"
+):
+    """
+    mode: allele or mutation
+    """
+    tmp_list = []
+    for sample in sorted(SampleList):
+        base_dir = os.path.join(file_path, f"{sample}")
+        df_tmp = lineage.load_allele_info(base_dir)
+        # print(f"Sample (before removing frequent alleles): {sample}; allele number: {len(df_tmp)}")
+        df_tmp["sample"] = sample.split("_")[0]
+        df_tmp["mouse"] = sample.split("-")[0]
+        tmp_list.append(df_tmp)
+    df_all_0 = pd.concat(tmp_list).rename(columns={"UMI_count": "obs_UMI_count"})
+    df_all = lineage.query_allele_frequencies(df_ref, df_all_0)
+
+    print("Clone number (before correction): {}".format(len(set(df_all["allele"]))))
+    print("Cell number (before correction): {}".format(len(df_all["allele"])))
+    df_HQ = df_all[df_all.expected_frequency < frequuency_cutoff]
+    print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
+    print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
+
+    if mode == "mutation":
+        adata_orig = lineage.generate_adata(df_all)
+    else:
+        adata_orig = lineage.generate_adata_sample_by_allele(df_HQ)
+    return adata_orig
+
+
 def custom_conditional_heatmap_v0(
     coarse_X_clone, fate_names, target_fate, conditional_fates
 ):
@@ -64,6 +94,13 @@ def custom_conditional_heatmap(
     only_LK=False,
     final_x_ticks=True,
 ):
+    """
+    only_LK: None, False, True
+        None -> do not partition the clone according to the presence of LK
+        False -> show both LK+ and LK- clones
+        True -> only show LK+ clones
+    """
+
     fate_names = np.array(fate_names)
     partition_fate = [x for x in fate_names if "LK" in x][0]
     sel_id = np.nonzero(fate_names == target_fate)[0][0]
@@ -73,7 +110,11 @@ def custom_conditional_heatmap(
             valid_clone_idx_tmp = ~(coarse_X_clone[fate_names == x].sum(0) > 0)
             valid_clone_idx = valid_clone_idx & valid_clone_idx_tmp
 
-    valid_clone_idx_tmp_2 = coarse_X_clone[fate_names == partition_fate].sum(0) > 0
+    if only_LK is not None:
+        valid_clone_idx_tmp_2 = coarse_X_clone[fate_names == partition_fate].sum(0) > 0
+    else:
+        valid_clone_idx_tmp_2 = np.ones(coarse_X_clone.shape[1]).astype(bool)
+        only_LK = True
 
     temp_idx_list = []
     for j, x_name in enumerate(conditional_fates):
@@ -136,22 +177,33 @@ def custom_conditional_heatmap(
             fig_width=10,
             fig_height=1,
         )
-        plt.title(
-            f"{np.sum(temp_idx)} clones; {short_fate_names[3]} {norm_X_count[sel_id,3]:.2f}; {short_fate_names[4]} {norm_X_count[sel_id,4]:.2f}; {short_fate_names[5]} {norm_X_count[sel_id,5]:.2f} {short_fate_names[6]} {norm_X_count[sel_id,6]:.2f}; {short_fate_names[7]} {norm_X_count[sel_id,7]:.2f}"
-        )
+        des = f"{np.sum(temp_idx)} clones;"
+        for j, x in enumerate(short_fate_names[1:]):
+            des = des + f" {x} {norm_X_count[sel_id,j+1]:.2f}"
+        plt.title(des)
+        # plt.title(
+        #     f"{np.sum(temp_idx)} clones; {short_fate_names[3]} {norm_X_count[sel_id,3]:.2f}; {short_fate_names[4]} {norm_X_count[sel_id,4]:.2f}; {short_fate_names[5]} {norm_X_count[sel_id,5]:.2f} {short_fate_names[6]} {norm_X_count[sel_id,6]:.2f}; {short_fate_names[7]} {norm_X_count[sel_id,7]:.2f}"
+        # )
 
 
 def custom_fate_bias_heatmap(
     coarse_X_clone,
     fate_names,
     conditional_fates=["LL405-E5-LT-HSC", "LL405-E5-ST-HSC", "LL405-E5-MPP3-4"],
+    only_LK=True,
 ):
+    """
+    only_LK: None, False, True
+        None -> do not partition the clone according to the presence of LK
+        False -> show both LK+ and LK- clones
+        True -> only show LK+ clones
+    """
     custom_conditional_heatmap(
         coarse_X_clone,
         fate_names,
         target_fate=conditional_fates[0],
         conditional_fates=conditional_fates[1:],
-        only_LK=True,
+        only_LK=only_LK,
         final_x_ticks=False,
         exclude_fates=None,
     )
@@ -160,7 +212,7 @@ def custom_fate_bias_heatmap(
         fate_names,
         target_fate=conditional_fates[1],
         conditional_fates=conditional_fates[2:],
-        only_LK=True,
+        only_LK=only_LK,
         final_x_ticks=False,
         exclude_fates=[conditional_fates[0]],
     )
@@ -169,7 +221,7 @@ def custom_fate_bias_heatmap(
         fate_names,
         target_fate=conditional_fates[2],
         conditional_fates=[],
-        only_LK=True,
+        only_LK=only_LK,
         final_x_ticks=True,
         exclude_fates=conditional_fates[:2],
     )
