@@ -611,7 +611,7 @@ def custom_hierachical_ordering(order_ids, matrix, pseudo_count=0.00001):
     A recursive algorithm to rank the clones.
     The matrix is fate-by-clone, and we order it in the clone dimension
     """
-    if (len(order_ids) < 2) or (matrix.shape[1] < 3):
+    if (len(order_ids) < 1) or (matrix.shape[1] < 2):
         return matrix
 
     order_ids = np.array(order_ids)
@@ -621,11 +621,11 @@ def custom_hierachical_ordering(order_ids, matrix, pseudo_count=0.00001):
         valid_clone_idx_tmp = valid_clone_idx & (matrix[x] > 0)
         data_matrix = matrix[:, valid_clone_idx_tmp].T
         valid_clone_idx = valid_clone_idx & (~valid_clone_idx_tmp)
-        # if np.sum(valid_clone_idx_tmp)>=3:
-        #     #order_y = cs.hf.get_hierch_order(data_matrix + pseudo_count)
-        #     #updated_matrix=data_matrix[order_y].T
-        # else:
-        updated_matrix = data_matrix.T
+        if np.sum(valid_clone_idx_tmp) >= 2:
+            order_y = cs.hf.get_hierch_order(data_matrix + pseudo_count)
+            updated_matrix = data_matrix[order_y].T
+        else:
+            updated_matrix = data_matrix.T
         updated_matrix_1 = custom_hierachical_ordering(
             order_ids[j + 1 :], updated_matrix, pseudo_count=pseudo_count
         )
@@ -634,3 +634,90 @@ def custom_hierachical_ordering(order_ids, matrix, pseudo_count=0.00001):
         matrix[:, valid_clone_idx]
     )  # add the remaining clones not selected before
     return np.column_stack(new_data_list)
+
+
+def plot_pie_chart(
+    matrix,
+    fate_names,
+    include_fate=None,
+    labeldistance=1.1,
+    rotatelabels=True,
+    counterclock=False,
+    textprops={"fontsize": 12},
+    **kwargs,
+):
+    """
+    Plot the pie chart for cell numbers overlapped between different fates. The input matrix should be a fate-by-clone matrix.
+
+    matrix.shape[0]=len(fate_names)
+
+    In the first step, we transform the matrix to a boelean matrix
+    """
+
+    matrix = matrix > 0
+    fate_names = np.array(fate_names)
+    if include_fate is None:
+        matrix_sub = matrix
+    else:
+        assert include_fate in fate_names
+        clone_idx = matrix[fate_names == include_fate, :].sum(0) > 0
+        matrix_sub = matrix[:, clone_idx]
+
+    cell_type_dict = {}
+    for i in range(matrix_sub.shape[1]):
+        id_tmp = tuple(sorted(np.array(fate_names)[matrix_sub[:, i]]))
+        if id_tmp not in cell_type_dict.keys():
+            cell_type_dict[id_tmp] = 1  # initial cell number
+        else:
+            cell_type_dict[id_tmp] += 1
+
+    your_data = dict(sorted(cell_type_dict.items()))
+    labels = []
+    sizes = []
+
+    for x, y in your_data.items():
+        tmp = list(x)
+        tmp.append(y)
+        labels.append(tmp)
+        sizes.append(y)
+
+    # Plot
+    plt.pie(
+        sizes,
+        labels=labels,
+        labeldistance=labeldistance,
+        rotatelabels=rotatelabels,
+        counterclock=counterclock,
+        textprops=textprops,
+        **kwargs,
+    )
+
+    plt.axis("equal")
+
+
+def plot_venn(data_1, data_2, data_3, labels=["1", "2", "3"]):
+
+    set_1 = set(data_1)
+    set_2 = set(data_2)
+    set_3 = set(data_3)
+
+    from matplotlib import pyplot as plt
+    from matplotlib_venn import (
+        venn2,
+        venn2_circles,
+        venn2_unweighted,
+        venn3,
+        venn3_circles,
+    )
+
+    vd3 = venn3(
+        [set_1, set_2, set_3],
+        set_labels=labels,
+        set_colors=("#c4e6ff", "#F4ACB7", "#9D8189"),
+        alpha=0.8,
+    )
+    venn3_circles([set_1, set_2, set_3], linestyle="-.", linewidth=2, color="grey")
+    for text in vd3.set_labels:
+        text.set_fontsize(16)
+    for text in vd3.subset_labels:
+        text.set_fontsize(16)
