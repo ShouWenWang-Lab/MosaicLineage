@@ -695,7 +695,7 @@ def plot_pie_chart(
     plt.axis("equal")
 
 
-def plot_venn(data_1, data_2, data_3, labels=["1", "2", "3"]):
+def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"]):
 
     set_1 = set(data_1)
     set_2 = set(data_2)
@@ -716,7 +716,34 @@ def plot_venn(data_1, data_2, data_3, labels=["1", "2", "3"]):
         set_colors=("#c4e6ff", "#F4ACB7", "#9D8189"),
         alpha=0.8,
     )
-    venn3_circles([set_1, set_2, set_3], linestyle="-.", linewidth=2, color="grey")
+    venn3_circles([set_1, set_2, set_3], linestyle="-", linewidth=0.5, color="grey")
+    for text in vd3.set_labels:
+        text.set_fontsize(16)
+    for text in vd3.subset_labels:
+        text.set_fontsize(16)
+
+
+def plot_venn2(data_1, data_2, labels=["1", "2"]):
+
+    set_1 = set(data_1)
+    set_2 = set(data_2)
+
+    from matplotlib import pyplot as plt
+    from matplotlib_venn import (
+        venn2,
+        venn2_circles,
+        venn2_unweighted,
+        venn3,
+        venn3_circles,
+    )
+
+    vd3 = venn2(
+        [set_1, set_2],
+        set_labels=labels,
+        set_colors=("#c4e6ff", "#F4ACB7"),
+        alpha=0.8,
+    )
+    venn2_circles([set_1, set_2], linestyle="-", linewidth=0.5, color="grey")
     for text in vd3.set_labels:
         text.set_fontsize(16)
     for text in vd3.subset_labels:
