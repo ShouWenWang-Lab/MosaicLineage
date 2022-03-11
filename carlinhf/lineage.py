@@ -166,15 +166,13 @@ def generate_FrequencyCounts(df_raw, save_dir=None):
     """
     df_raw is a pandas object, with
     'allele','UMI_count'
-    """
-    df_input = df_raw.set_index("allele")
-    all_alleles = list(set(df_input.index))
-    UMI_count = np.zeros(len(all_alleles))
-    from tqdm import tqdm
 
-    for j in tqdm(range(len(all_alleles))):
-        xx = all_alleles[j]
-        UMI_count[j] = df_input.loc[xx]["UMI_count"].sum()
+    A speeded up version
+    """
+    df_input = df_raw.reset_index()
+    df_new = df_input.groupby("allele", as_index=False).agg({"UMI_count": "sum"})
+
+    UMI_count = list(df_new["UMI_count"])
 
     unique_count = np.sort(list(set(UMI_count))).astype(int)
     count_frequency = np.zeros(len(unique_count), dtype=int)
