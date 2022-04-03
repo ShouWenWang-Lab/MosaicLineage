@@ -37,6 +37,7 @@ def plot_density(x, bins=50, cutoff_y=5, cutoff_x=None, data_des=None):
         plt.title(f"Slope ({data_des}): {line_resu.slope:.2f}")
     plt.xlabel("Clone size")
     plt.ylabel("Count")
+    return x_var, y_var
 
 
 def plot_loghist(x, bins=50, cutoff_y=5, cutoff_x=None, data_des=None):
@@ -65,6 +66,7 @@ def plot_loghist(x, bins=50, cutoff_y=5, cutoff_x=None, data_des=None):
         plt.title(f"Slope ({data_des}): {line_resu.slope:.2f}")
     plt.xlabel("Clone size")
     plt.ylabel("Count")
+    return x_var, y_var
 
 
 def plot_cumu(X, data_des=None, cutoff_x_up=None, cutoff_x_down=1):
@@ -92,6 +94,7 @@ def plot_cumu(X, data_des=None, cutoff_x_up=None, cutoff_x_down=1):
         plt.title(f"Slope ({data_des}): {line_resu.slope:.2f}")
     plt.xlabel("Clone size (x)")
     plt.ylabel("Cumulative count (>=x)")
+    return x_var, y_var
 
 
 def estimate_exponent(X, xmin=None):
