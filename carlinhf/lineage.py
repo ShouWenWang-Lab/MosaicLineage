@@ -11,6 +11,7 @@ import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
+from tqdm import tqdm
 
 rng = np.random.default_rng()
 
@@ -136,30 +137,133 @@ def load_allele_info(data_path):
     return pd.DataFrame({"allele": alleles, "UMI_count": allele_freqs})
 
 
-def mutation_count_dictionary(df_data, count_key="UMI_count"):
-    mutation_dict = {}
-    from tqdm import tqdm
+def mutations_per_allele(
+    df_input, count_key="UMI_count", save=False, save_path=".", plot=False
+):
 
     mutation_per_allele = []
+    for j, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
+        mutation_per_allele.append(len(x))
 
-    for i in tqdm(range(len(df_data))):
-        xx = df_data["allele"].values[i]
-        UMI_count = df_data[count_key].values[i]
-        mutation_per_allele.append(len(xx.split(",")))
-        for mut in xx.split(","):
-            if mut not in mutation_dict.keys():
-                mutation_dict[mut] = UMI_count
-            else:
-                mutation_dict[mut] = mutation_dict[mut] + UMI_count
+    if plot:
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax = sns.histplot(x=mutation_per_allele, binwidth=0.5)
+        ax.set_xlabel("Mutation number per allele")
+        ax.set_ylabel("Count")
+        ax.set_title(f"Mean: {np.mean(mutation_per_allele):.1f}")
+        plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+        if save:
+            fig.savefig(f"{save_path}/mutation_per_allele.pdf")
+    return mutation_per_allele
 
-    print(f"mutation number {len(mutation_dict)}; total allele number  {len(df_data)}")
 
-    ax = sns.histplot(x=mutation_per_allele, binwidth=0.5)
-    ax.set_xlabel("Mutation number per allele")
-    ax.set_ylabel("Count")
-    ax.set_title(f"Mean: {np.mean(mutation_per_allele):.1f}")
-    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
-    return mutation_dict, mutation_per_allele
+def mutations_per_allele_ins_del(df_input):
+    """
+    Count the insertion and deletion events. Note that
+    some mutations have both insertion and deletion, and we are
+    double counting here.
+    """
+
+    ins_per_allele = []
+    del_per_allele = []
+    for j, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
+        temp_ins = [y for y in x if "ins" in y]
+        temp_del = [y for y in x if "del" in y]
+        ins_per_allele.append(len(temp_ins))
+        del_per_allele.append(len(temp_del))
+
+    return ins_per_allele, del_per_allele
+
+
+def mutations_length_per_allele_ins_del(df_input):
+    """
+    Count the insertion and deletion length. Note that
+    some mutations have both insertion and deletion, and we are
+    double counting here.
+    """
+
+    ins_per_allele = []
+    del_per_allele = []
+    for i, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
+        temp_del = []
+        temp_ins = []
+        for y in x:
+            if "del" in y:
+                temp = y.split("del")[0].split("_")
+                del_len = int(temp[1]) - int(temp[0])
+                temp_del.append(del_len)
+
+            if "ins" in y:
+                temp = y.split("ins")[1]
+                temp_ins.append(len(temp))
+
+        ins_per_allele.append(temp_ins)
+        del_per_allele.append(temp_del)
+
+    return ins_per_allele, del_per_allele
+
+
+def mutation_frequency(df_input, save=False, save_path="."):
+    """
+    df_Input: should ahve 'allele' and 'UMI_count'
+    df_mutation_ne: should have 'mutation' and 'UMI_count'
+    """
+    mut_list = []
+    UMI_count = []
+    for j, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
+        mut_list += x
+        UMI_count += list(np.repeat(df_input["UMI_count"].iloc[j], len(x)))
+    df_mutation = pd.DataFrame({"mutation": mut_list, "UMI_count": UMI_count})
+    df_mutation_new = df_mutation.groupby("mutation", as_index=False).agg(
+        {"UMI_count": "sum"}
+    )
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax = sns.histplot(data=df_mutation_new, x="UMI_count", log_scale=True)
+    plt.yscale("log")
+    singleton_fraction = np.sum(df_mutation_new["UMI_count"] == 1) / np.sum(
+        df_mutation_new["UMI_count"] > 0
+    )
+    ax.set_title(f"1 frac. ={singleton_fraction:.3f}")
+    if save:
+        fig.savefig(f"{save_path}/mutation_frequency.pdf")
+
+    return df_mutation_new
+
+
+def effective_allele_number(UMI_counts):
+    x = np.array(UMI_counts) / np.sum(UMI_counts)
+    entropy = -np.sum(np.log2(x) * x)
+    return 2 ** entropy
+
+
+def effective_allele_over_cell_fraction(df_input, editing_efficiency: float = None):
+
+    if editing_efficiency is not None:
+        UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
+        null_index = np.nonzero(np.array(df_input["allele"] == "[]"))[0][0]
+        new_null_count = (
+            (np.sum(UMI_count_temp) - UMI_count_temp[null_index])
+            / editing_efficiency
+            * (1 - editing_efficiency)
+        )
+        UMI_count_temp[null_index] = new_null_count
+    else:
+        UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
+    UMI_counts = np.sort(UMI_count_temp)[::-1]
+
+    tot_counts = np.sum(UMI_counts)
+    effective_allele_N = np.zeros(len(UMI_counts))
+    cell_fraction = np.zeros(len(UMI_counts))
+    for j in tqdm(range(len(UMI_counts))):
+        temp = effective_allele_number(UMI_counts[j:])
+        effective_allele_N[j] = temp
+        cell_fraction[j] = np.sum(UMI_counts[:j])
+    cell_fraction = 1 - cell_fraction / tot_counts
+    df_data = pd.DataFrame(
+        {"cell_fraction": cell_fraction, "effective_allele_N": effective_allele_N}
+    )
+    return df_data
 
 
 def generate_FrequencyCounts(df_raw, save_dir=None):
@@ -173,7 +277,6 @@ def generate_FrequencyCounts(df_raw, save_dir=None):
     df_new = df_input.groupby("allele", as_index=False).agg({"UMI_count": "sum"})
 
     UMI_count = list(df_new["UMI_count"])
-
     unique_count = np.sort(list(set(UMI_count))).astype(int)
     count_frequency = np.zeros(len(unique_count), dtype=int)
     for j, x in enumerate(unique_count):
@@ -263,48 +366,6 @@ def onehot(input_dict):
         output_dict[key] = list(temp)
 
     return output_dict
-
-
-def tree_reconstruction_accuracy_v1(my_tree, origin_score, weight_factor=1, plot=False):
-    """
-    origin_score:
-        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name.
-        We recommend to symmetric value like -1 and 1, instead of 0 and 1. Otherwise, our weighting scheme is not working
-    """
-
-    node_score = {}
-    for key, value in node_mapping.items():
-        temp_scores = [origin_score[x] for x in value]
-        node_score[key] = np.mean(temp_scores, axis=0) / weight_factor ** len(
-            temp_scores
-        )
-
-    score_pairs = []
-    child_nodes = []
-    parent_nodes = []
-    for key, value in parent_map.items():
-        child_nodes.append(key)
-        parent_nodes.append(value)
-    df = pd.DataFrame({"child": child_nodes, "parent": parent_nodes}).set_index(
-        "parent"
-    )
-    for unique_parent in list(set(parent_nodes)):
-        temp_pair = [node_score[xx] for xx in df.loc[unique_parent]["child"].values]
-        score_pairs.append(temp_pair)
-    score_pairs = np.array(score_pairs)
-    score_pairs_flatten = [
-        score_pairs[:, 0, :].flatten(),
-        score_pairs[:, 1, :].flatten(),
-    ]
-
-    if plot:
-        ax = sns.scatterplot(x=score_pairs_flatten[0], y=score_pairs_flatten[1])
-        ax.set_xlabel("Membership score for node a")
-        ax.set_ylabel("Membership score for node b")
-        ax.set_title(f"Decay factor={weight_factor:.2f}")
-
-    corr = np.corrcoef(score_pairs_flatten[0], score_pairs_flatten[1])[0, 1]
-    return corr, score_pairs_flatten
 
 
 def tree_reconstruction_accuracy(
@@ -544,6 +605,20 @@ def clonal_analysis(
             figure_path=cs.settings.figure_path,
             dpi=300,
         )
+
+
+def correct_null_allele_frequency(df_input, editing_efficiency=0.3):
+    UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
+    null_index = np.nonzero(np.array(df_input["allele"] == "[]"))[0][0]
+    new_null_count = (
+        (np.sum(UMI_count_temp) - UMI_count_temp[null_index])
+        / editing_efficiency
+        * (1 - editing_efficiency)
+    )
+    UMI_count_temp[null_index] = int(new_null_count)
+    df_output = df_input.copy()
+    df_output["UMI_count"] = UMI_count_temp.astype(int)
+    return df_output
 
 
 def get_fate_count_coupling(X_clone):
