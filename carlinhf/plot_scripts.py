@@ -7,6 +7,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
+import carlinhf.LINE1 as line1
 import carlinhf.lineage as lineage
 
 cs.settings.set_figure_params(
@@ -15,7 +16,7 @@ cs.settings.set_figure_params(
 rcParams["legend.handlelength"] = 1.5
 
 
-def add_shade(ax):
+def add_shade(ax, color=["#2b83ba", "#d7191c"]):
     l1 = ax.lines[0]
     l2 = ax.lines[1]
     # Get the xy data from the lines so that we can shade
@@ -23,12 +24,73 @@ def add_shade(ax):
     y1 = l1.get_xydata()[:, 1]
     x2 = l2.get_xydata()[:, 0]
     y2 = l2.get_xydata()[:, 1]
-    ax.fill_between(x1, y1, color="#2b83ba", alpha=0.5)
-    ax.fill_between(x2, y2, color="#d7191c", alpha=0.1)
+    ax.fill_between(x1, y1, color=color[0], alpha=0.5)
+    ax.fill_between(x2, y2, color=color[1], alpha=0.1)
     return ax
 
 
-def mutation_statistics(df_LL, df_SB, sample_key):
+def add_shade_1(ax, color="#2b83ba"):
+    l1 = ax.lines[0]
+    # Get the xy data from the lines so that we can shade
+    x1 = l1.get_xydata()[:, 0]
+    y1 = l1.get_xydata()[:, 1]
+    ax.fill_between(x1, y1, color=color, alpha=0.5)
+    return ax
+
+
+def remove_samples(df, removed_sample):
+    ## remove some negative controls
+    if removed_sample is not None:
+        del_samples = []
+        for x in df["sample"]:
+            if np.sum([y in x for y in removed_sample]) > 0:
+                del_samples.append(x)
+
+        df_new = df[~df["sample"].isin(del_samples)]
+    else:
+        df_new = df
+    return df_new
+
+
+def mutation_statistics_box_plot(df, sample_key, removed_sample=None):
+    """
+    df_noMerge: a
+    """
+
+    ## remove some negative controls
+    if removed_sample is None:
+        removed_sample = ["merge_all"]
+    else:
+        removed_sample.append("merge_all")
+    df_noM_new = remove_samples(df, removed_sample)
+
+    keys = ["ave_del_len", "ave_insert_len", "ins_del_ratio_ratio_by_eventful_UMI"]
+    y_labels = [
+        "Average deletion length",
+        "Average insertion length",
+        "(Insertion #)/(deletion #): per UMI",
+    ]
+
+    for j, key in enumerate(keys):
+        fig, ax = plt.subplots(figsize=(3, 4))
+        ax = sns.boxplot(data=df_noM_new, x="Design", y=key, width=0.5)
+        ax = sns.stripplot(
+            data=df_noM_new,
+            x="Design",
+            y=key,
+            size=5,
+            edgecolor="black",
+            linewidth=1,
+            jitter=1,
+        )
+        ax.set_ylabel(y_labels[j])
+        ax.set_xlabel("")
+        plt.xticks(rotation=90)
+        plt.tight_layout()
+        fig.savefig(f"figure/{sample_key}/{key}_202105.pdf")
+
+
+def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     """
     df_LL: allele count dataframe from Cas9-TdT mouse
     df_SB: allele count dataframe from Cas9 mouse
@@ -133,6 +195,9 @@ def mutation_statistics(df_LL, df_SB, sample_key):
     print(
         f"Mean total insertion length for Cas9: {np.mean(ins_length_SB)}; for Cas9-TdT: {np.mean(ins_length_LL)}"
     )
+    print(
+        f"Mediam total insertion length for Cas9: {np.median(ins_length_SB)}; for Cas9-TdT: {np.median(ins_length_LL)}"
+    )
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
@@ -195,6 +260,9 @@ def mutation_statistics(df_LL, df_SB, sample_key):
 
     print(
         f"Mean total deletion length for Cas9: {np.mean(del_length_SB)}; for Cas9-TdT: {np.mean(del_length_LL)}"
+    )
+    print(
+        f"Mediam total deletion length for Cas9: {np.median(del_length_SB)}; for Cas9-TdT: {np.median(del_length_LL)}"
     )
 
     fig, ax = plt.subplots()
@@ -261,3 +329,515 @@ def mutation_statistics(df_LL, df_SB, sample_key):
     plt.savefig(
         f"figure/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
+
+
+def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9"):
+    """
+    df_SB: allele count dataframe from Cas9 mouse
+    sample_key: for making a separate folder and save the data
+    """
+    os.makedirs(f"figure/{sample_key}", exist_ok=True)
+
+    ### Mutation event number per allele
+    mut_per_allele_SB = lineage.mutations_per_allele(df_SB)
+
+    mut_SB_hist_y, mut_SB_hist_x = np.histogram(mut_per_allele_SB, bins=np.arange(15))
+    mut_SB_hist_y = mut_SB_hist_y / np.sum(mut_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=mut_SB_hist_x[:-1], y=mut_SB_hist_y, label=label, marker="o", ax=ax
+    )
+
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Mutation event # per allele")
+    ax.set_ylabel("Distribution")
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(f"figure/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
+
+    ### Insertion event number per allele
+    ins_per_allele_SB, del_per_allele_SB = lineage.mutations_per_allele_ins_del(df_SB)
+
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_per_allele_SB, bins=np.arange(15))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label, marker="o")
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Insertion event # per allele")
+    ax.set_ylabel("Distribution")
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(f"figure/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
+
+    ### Deletion event number per allele
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_per_allele_SB, bins=np.arange(15))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label, marker="o")
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Deletion event # per allele")
+    ax.set_ylabel("Distribution")
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(f"figure/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=ins_SB_hist_x[:-1],
+        y=ins_SB_hist_y,
+        label="Insertion",
+        marker="o",
+        color="#225ea8",
+    )
+    ax = sns.lineplot(
+        x=del_SB_hist_x[:-1],
+        y=del_SB_hist_y,
+        label="Deletion",
+        marker="o",
+        color="#d7301f",
+    )
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Event # per allele")
+    ax.set_ylabel("Distribution")
+    plt.tight_layout()
+    add_shade(ax, color=["#225ea8", "#d7301f"])
+    plt.savefig(f"figure/{sample_key}/ins_deletion_per_allele.pdf")
+
+    ## Total insertion length per allele
+    ins_per_allele_SB, del_per_allele_SB = lineage.mutations_length_per_allele_ins_del(
+        df_SB
+    )
+    ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label
+    )  # ,marker='o')
+    ax.set_xlim([-0.1, 30])
+    ax.set_xlabel("Total insertion length per allele")
+    ax.set_ylabel("Distribution")
+    # plt.xscale('log')
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(f"figure/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf")
+
+    ## Single insertion length per allele
+    ins_length_SB = []
+    for x in ins_per_allele_SB:
+        ins_length_SB += list(x)
+
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label
+    )  # ,marker='o')
+
+    ax.set_xlim([-0.1, 30])
+    ax.set_xlabel("Single insertion length per allele")
+    ax.set_ylabel("Distribution")
+    # plt.xscale('log')
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(
+        f"figure/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Total deletion length per allele
+    del_length_SB = [np.sum(x) for x in del_per_allele_SB]
+
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_length_SB, bins=np.arange(300))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label
+    )  # ,marker='o')
+
+    # ax.set_xlim([-0.1,30])
+    ax.set_xlabel("Total deletion length per allele")
+    ax.set_ylabel("Distribution")
+    # plt.xscale('log')
+    plt.tight_layout()
+    add_shade_1(ax)
+    plt.savefig(f"figure/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf")
+
+    ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+    rcParams["axes.spines.right"] = True
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.plot(
+        ins_SB_hist_x[:-1],
+        ins_SB_hist_y,
+        label="Ins",
+        color="#225ea8",
+    )  # ,marker='o')
+    ax2 = plt.twinx()
+    ax2.plot(
+        del_SB_hist_x[:-1],
+        del_SB_hist_y,
+        label="Del",
+        color="#d7301f",
+    )  # ,marker='o')
+    ax.set_xlabel("Total mutation length per allele")
+    ax.set_ylabel("Distribution")
+    # ax2.set_ylabel("")
+    ax.figure.legend(loc="upper center")
+    # plt.xscale('log')
+    add_shade_1(ax, color="#225ea8")
+    add_shade_1(ax2, color="#d7301f")
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/tot_ins_del_length_per_allele.pdf")
+    rcParams["axes.spines.right"] = False
+
+    ## Single deletion length per allele
+    del_length_SB = []
+    for x in del_per_allele_SB:
+        del_length_SB += list(x)
+
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_length_SB, bins=np.arange(300))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label
+    )  # ,marker='o')
+
+    # ax.set_xlim([-0.1,30])
+    ax.set_xlabel("Single deletion length per allele")
+    ax.set_ylabel("Distribution")
+    # plt.xscale('log')
+    add_shade_1(ax)
+    plt.tight_layout()
+    plt.savefig(
+        f"figure/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Single deletion length
+    y_SB = np.cumsum(del_SB_hist_y)
+    fig, ax = plt.subplots()
+    sns.lineplot(x=[0] + list(del_SB_hist_x[:-1]), y=[0] + list(y_SB), label=label)
+    ax.set_xlabel("Single deletion length")
+    ax.set_ylabel("Cumulative deletion frequency")
+    plt.tight_layout()
+    plt.savefig(
+        f"figure/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+
+def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
+    """
+    df_LL: allele count dataframe from Cas9-TdT mouse
+    df_SB: allele count dataframe from Cas9 mouse
+    sample_key: for making a separate folder and save the data
+    """
+    os.makedirs(f"figure/{sample_key}", exist_ok=True)
+
+    df_SB = lineage.correct_null_allele_frequency(df_SB, editing_efficiency=0.3)
+    ins_per_allele_LL, del_per_allele_LL = lineage.mutations_length_per_allele_ins_del(
+        df_LL
+    )
+    ins_per_allele_SB, del_per_allele_SB = lineage.mutations_length_per_allele_ins_del(
+        df_SB
+    )
+
+    freq_LL = df_LL["UMI_count"].to_numpy()
+    freq_SB = df_SB["UMI_count"].to_numpy()
+    ins_length_LL_tot = [
+        np.repeat(int(np.sum(x)), freq_LL[i]) for i, x in enumerate(ins_per_allele_LL)
+    ]
+    ins_length_SB_tot = [
+        np.repeat(int(np.sum(x)), freq_SB[i]) for i, x in enumerate(ins_per_allele_SB)
+    ]
+    ins_length_LL = []
+    for x in ins_length_LL_tot:
+        ins_length_LL += list(x)
+
+    ins_length_SB = []
+    for x in ins_length_SB_tot:
+        ins_length_SB += list(x)
+
+    ins_LL_hist_y, ins_LL_hist_x = np.histogram(ins_length_LL, bins=np.arange(100))
+    ins_LL_hist_y = ins_LL_hist_y / np.sum(ins_LL_hist_y)
+
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+
+    print(
+        f"Mean insertion length for Cas9: {np.mean(ins_length_SB)}; for Cas9-TdT: {np.mean(ins_length_LL)}"
+    )
+
+    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label="Cas9", marker="o")
+    ax = sns.lineplot(
+        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label="Cas9-TdT", ax=ax, marker="o"
+    )
+    # plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    ax.set_xlim([-0.1, 10.2])
+    ax.set_xlabel("Total insertion length per UMI")
+    ax.set_ylabel("Distribution")
+    # plt.xscale('log')
+    plt.tight_layout()
+    add_shade(ax)
+    plt.savefig(f"figure/{sample_key}/tot_ins_length_per_UMI_compare_cas9_Dntt.pdf")
+
+
+def allele_statistics_at_given_sampling_depth(
+    df_Merge, sample_key, removed_sample=None, allele_cutoff=0
+):
+
+    # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
+    x_label_1 = "Observed cell # (called UMI)"
+    x_label_2 = "Edited cell # (edited UMI)"
+    os.makedirs("figure/" + sample_key, exist_ok=True)
+
+    ## Singleton fraction
+    df_Merge_1 = df_Merge[df_Merge.total_alleles > allele_cutoff]
+    df_Merge_1["singleton_ratio"] = (
+        df_Merge_1["singleton"] / df_Merge_1["total_alleles"]
+    )
+    df_Merge_1["total_alleles"] = np.log10(df_Merge_1["total_alleles"])
+    g = sns.lmplot(
+        data=df_Merge_1,
+        x="total_alleles",
+        y="singleton_ratio",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        robust=True,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        line_kws={"linewidth": 2},
+    )
+    g.ax.set_xlabel("Total observed alleles")
+    g.ax.set_ylabel("Singleton fraction")
+    g.ax.set_ylim([0, 1])
+    g.ax.set_xlim([2, 6])
+    plt.xticks(
+        ticks=[2, 3, 4, 5, 6],
+        labels=[r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", r"$10^6$"],
+    )
+    plt.savefig(f"figure/{sample_key}/Singleton_fraction.pdf")
+
+    ## remove some negative controls
+    df_Merge_2 = remove_samples(df_Merge, removed_sample)
+
+    ## Observed allele number
+    g = sns.lmplot(
+        data=df_Merge_2,
+        x="UMI_eventful",
+        y="total_alleles",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_2)
+    g.ax.set_ylabel("Observed allele number")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/total_allele_vs_UMI_eventful.pdf")
+
+    g = sns.lmplot(
+        data=df_Merge_2,
+        x="UMI_called",
+        y="total_alleles",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_1)
+    g.ax.set_ylabel("Observed allele number")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/total_allele_vs_UMI_called.pdf")
+
+    ## Observed singleton
+    g = sns.lmplot(
+        data=df_Merge_2,
+        x="UMI_eventful",
+        y="singleton",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_2)
+    g.ax.set_ylabel("# of alleles observed only once")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/singleton_vs_UMI_eventful.pdf")
+
+    g = sns.lmplot(
+        data=df_Merge_2,
+        x="UMI_called",
+        y="singleton",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_1)
+    g.ax.set_ylabel("# of alleles observed only once")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/singleton_vs_UMI_called.pdf")
+
+    ## Effective allele number
+    df_Merge_3 = df_Merge_2[df_Merge_2.total_alleles > allele_cutoff]
+    g = sns.lmplot(
+        data=df_Merge_3,
+        x="UMI_eventful",
+        y="effective_allele_N",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        line_kws={"linewidth": 2},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_2)
+    g.ax.set_ylabel("Effective allele number")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/effective_allele_vs_UMI_eventful.pdf")
+
+    g = sns.lmplot(
+        data=df_Merge_3,
+        x="UMI_called",
+        y="effective_allele_N",
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        robust=False,
+        lowess=False,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        line_kws={"linewidth": 2},
+    )
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel(x_label_1)
+    g.ax.set_ylabel("Effective allele number")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/effective_allele_vs_UMI_called.pdf")
+
+    ## Average deletion length over CARLIN potential
+    x = "ave_del_len"
+    y = "CARLIN_potential_by_UMI"
+    df_temp = df_Merge
+    g = sns.lmplot(
+        data=df_temp,
+        x=x,
+        y=y,
+        hue="Design",
+        ci=None,
+        palette="muted",
+        height=4,
+        aspect=1.2,
+        scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        line_kws={"linewidth": 2},
+    )
+    # for i in range(len(df_temp)):
+    #     plt.text(df_temp.iloc[i][x]+0.2, df_temp.iloc[i][y]+0.2, df_temp.iloc[i]['Tissue'])
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
+    g.ax.set_xlabel("Average deletion length")
+    g.ax.set_ylabel("CARLIN potential by UMI")
+    # plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/del_length_vs_CARLIN_potential.pdf")
+
+
+def insertion_del_freq_histogram(df, sample_key):
+    """
+    This is to test whether insertion contributes to more rare alleles than deletion
+    """
+
+    os.makedirs("figure/" + sample_key, exist_ok=True)
+    df_mutation = lineage.mutation_frequency(df, plot=False)
+    x_var, y_var = line1.plot_loghist(
+        list(df_mutation["UMI_count"]), cutoff_y=1, bins=20
+    )
+    x_label = "Occurence # per allele (UMI count)"
+
+    # x_var=[0,5,10,100,500,1000,10000,1000000]
+    df_mutation_1 = df_mutation.reset_index()
+    # df_mutation_1=df_mutation_1[
+    sel_idx = df_mutation_1["mutation"].apply(
+        lambda x: (("del" in x) and ("ins" not in x))
+    )
+    df_mutation_del = df_mutation_1[sel_idx]
+    y_var_del, x_var_del = np.histogram(list(df_mutation_del["UMI_count"]), bins=x_var)
+
+    sel_idx = df_mutation_1["mutation"].apply(
+        lambda x: (("del" not in x) and ("ins" in x))
+    )
+    df_mutation_ins = df_mutation_1[sel_idx]
+    y_var_ins, x_var_ins = np.histogram(list(df_mutation_ins["UMI_count"]), bins=x_var)
+
+    sel_idx = df_mutation_1["mutation"].apply(lambda x: (("del" in x) and ("ins" in x)))
+    df_mutation_indel = df_mutation_1[sel_idx]
+    y_var_indel, x_var_indel = np.histogram(
+        list(df_mutation_indel["UMI_count"]), bins=x_var
+    )
+
+    fig, ax = plt.subplots()
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del")
+    plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="ins")
+    plt.loglog(x_var_indel[:-1], y_var_indel, "-o", label="indel")
+    plt.legend()
+    plt.xlabel(x_label)
+    plt.ylabel("Histogram")
+    plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/in_del_freq_histogram_log.pdf")
+
+    fig, ax = plt.subplots()
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del")
+    plt.loglog(x_var_ins[:-1], y_var_ins + y_var_indel, "-o", label="ins+indel")
+    plt.legend()
+    plt.xlabel(x_label)
+    plt.ylabel("Histogram")
+    plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/indel_del_freq_histogram_log.pdf")
+
+    fig, ax = plt.subplots()
+    ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="del", marker="o")
+    ax = sns.lineplot(
+        x=x_var_del[:-1],
+        y=y_var_ins + y_var_indel,
+        label="ins+indel",
+        ax=ax,
+        marker="o",
+    )
+    # plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    ax.set_xlim([0, 50])
+    plt.xlabel(x_label)
+    ax.set_ylabel("Histogram")
+    # plt.xscale('log')
+    plt.tight_layout()
+    add_shade(ax)
+    plt.tight_layout()
+    plt.savefig(f"figure/{sample_key}/ins_del_freq_histogram_normal_scale.pdf")
