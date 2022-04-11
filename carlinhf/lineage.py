@@ -922,7 +922,7 @@ def check_allele_frequency_prediction(
 ):
     if df_mutation is None:
         df_mutation = mutation_frequency(df, plot=False)
-    
+
     df_mutation = df_mutation.set_index("mutation")
     norm_factor = df_mutation["UMI_count"].sum()
     df_mutation["Frequency"] = df_mutation["UMI_count"].apply(lambda x: x / norm_factor)
@@ -1135,4 +1135,4 @@ def generate_synthetic_alleles(
 
     df_synthesis = pd.DataFrame({"allele": new_allele_array})
     df_synthesis["UMI_count"] = 1
-    return df_synthesis.groupby("allele").agg({"UMI_count": "sum"})
+    return df_synthesis.groupby("allele").agg({"UMI_count": "sum"}).reset_index()
