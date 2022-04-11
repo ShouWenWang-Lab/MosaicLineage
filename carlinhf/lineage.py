@@ -13,6 +13,8 @@ from matplotlib import pyplot as plt
 from scipy.io import loadmat
 from tqdm import tqdm
 
+import carlinhf.LINE1 as line1
+
 rng = np.random.default_rng()
 
 
@@ -203,7 +205,7 @@ def mutations_length_per_allele_ins_del(df_input):
     return ins_per_allele, del_per_allele
 
 
-def mutation_frequency(df_input, save=False, save_path="."):
+def mutation_frequency(df_input, save=False, save_path=".", plot=True):
     """
     df_Input: should ahve 'allele' and 'UMI_count'
     df_mutation_ne: should have 'mutation' and 'UMI_count'
@@ -218,15 +220,16 @@ def mutation_frequency(df_input, save=False, save_path="."):
         {"UMI_count": "sum"}
     )
 
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ax = sns.histplot(data=df_mutation_new, x="UMI_count", log_scale=True)
-    plt.yscale("log")
-    singleton_fraction = np.sum(df_mutation_new["UMI_count"] == 1) / np.sum(
-        df_mutation_new["UMI_count"] > 0
-    )
-    ax.set_title(f"1 frac. ={singleton_fraction:.3f}")
-    if save:
-        fig.savefig(f"{save_path}/mutation_frequency.pdf")
+    if plot:
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax = sns.histplot(data=df_mutation_new, x="UMI_count", log_scale=True)
+        plt.yscale("log")
+        singleton_fraction = np.sum(df_mutation_new["UMI_count"] == 1) / np.sum(
+            df_mutation_new["UMI_count"] > 0
+        )
+        ax.set_title(f"1 frac. ={singleton_fraction:.3f}")
+        if save:
+            fig.savefig(f"{save_path}/mutation_frequency.pdf")
 
     return df_mutation_new
 
@@ -250,13 +253,21 @@ def effective_allele_over_cell_fraction(df_input, editing_efficiency: float = No
         UMI_count_temp[null_index] = new_null_count
     else:
         UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
-    UMI_counts = np.sort(UMI_count_temp)[::-1]
 
+    df_input_1 = df_input.copy()
+    df_input_1["UMI_count"] = UMI_count_temp
+    df_sort = df_input_1.sort_values("UMI_count", ascending=False)
+    UMI_counts = df_sort["UMI_count"]
+    UMI_counts_no_null = df_sort[df_sort.allele != "[]"]["UMI_count"]
     tot_counts = np.sum(UMI_counts)
-    effective_allele_N = np.zeros(len(UMI_counts))
-    cell_fraction = np.zeros(len(UMI_counts))
-    for j in tqdm(range(len(UMI_counts))):
-        temp = effective_allele_number(UMI_counts[j:])
+    effective_allele_N = np.zeros(len(df_sort) - 1)
+    cell_fraction = np.zeros(len(df_sort) - 1)
+    null_idx = np.nonzero(np.array(df_sort.allele == "[]"))[0]
+    for j in tqdm(range(len(df_sort) - 1)):
+        if j < null_idx:
+            temp = effective_allele_number(UMI_counts_no_null[j:])
+        else:
+            temp = effective_allele_number(UMI_counts_no_null[j + 1 :])
         effective_allele_N[j] = temp
         cell_fraction[j] = np.sum(UMI_counts[:j])
     cell_fraction = 1 - cell_fraction / tot_counts
@@ -342,6 +353,83 @@ def subsample_allele_frequency_count(df_input, sp_fraction, out_dir):
     data_path = f"{out_dir}/sp_{sp_fraction:.1f}"
     os.makedirs(data_path, exist_ok=True)
     df_sp.to_csv(f"{data_path}/FrequencyCounts.csv", header=None)
+
+
+def subsample_allele_freq_histogram(df, sample_key, sample_fraction=0.1, plot=True):
+
+    df["allele_frequency"] = df["UMI_count"] / df["UMI_count"].sum()
+    sel_idx = np.random.choice(
+        np.arange(len(df)),
+        size=int(sample_fraction * len(df)),
+        p=df["allele_frequency"].to_numpy(),
+        replace=True,
+    )
+    df_new = df.iloc[sel_idx]
+    df_new["UMI_count"] = 1  # df["UMI_count"].sum() / len(df_new)
+    df_new = df_new.groupby("allele", as_index=False).agg({"UMI_count": "sum"})
+
+    # if 1 * sample_fraction < 1:
+    #     threshold = 1
+    # else:
+    #     # a middle barrier between 1 and 2, expected UMI
+    #     threshold = 1 * sample_fraction
+
+    # print(f"The threshold: {threshold}")
+    singleton_ratio = np.sum(df_new["UMI_count"] <= df_new["UMI_count"].min()) / len(
+        df_new
+    )
+
+    if plot:
+        print(f"Singleton ratio: {singleton_ratio}")
+
+        x_var, y_var = line1.plot_loghist(list(df_new["UMI_count"]), cutoff_y=3)
+        plt.tight_layout()
+        plt.xlabel("Occurence # per allele (UMI count)")
+        plt.ylabel("Histogram")
+        plt.title(f"Singleton ratio: {singleton_ratio:.2f}")
+        plt.savefig(f"figure/{sample_key}/subsampled_allele_frequency_distribution.pdf")
+
+    return df_new, singleton_ratio
+
+
+def subsample_singleton_fraction(df, sample_key, sample_fraction_array, plot=True):
+
+    singleton_ratio_orig = np.sum(df["UMI_count"] == 1) / len(df)
+
+    singleton_ratio_array = np.zeros(len(sample_fraction_array))
+    allele_fraction_array = np.zeros(len(sample_fraction_array))
+    for j, x in enumerate(sample_fraction_array):
+        (df_new, singleton_ratio_array[j],) = subsample_allele_freq_histogram(
+            df, sample_key, sample_fraction=x, plot=False
+        )
+        allele_fraction_array[j] = len(df_new) / len(df)
+
+    if plot:
+        fig, ax = plt.subplots()
+        plt.plot(sample_fraction_array, singleton_ratio_array)
+        # plt.plot(x_range, [singleton_ratio_orig, singleton_ratio_orig])
+        plt.xlabel("Subsample ratio")
+        plt.ylabel("Singleton ratio")
+        plt.xscale("log")
+        plt.savefig(f"figure/{sample_key}/subsample_singleton_fraction.pdf")
+
+        fig, ax = plt.subplots()
+        plt.plot(sample_fraction_array, allele_fraction_array)
+        plt.xlabel("Subsample ratio")
+        plt.ylabel("Allele fraction")
+        plt.xscale("log")
+        plt.savefig(f"figure/{sample_key}/subsample_allele_fraction.pdf")
+
+    result = {}
+    allele_norm_factor = allele_fraction_array[np.array(sample_fraction_array) == 1][0]
+    singleton_norm_factor = singleton_ratio_array[np.array(sample_fraction_array) == 1][
+        0
+    ]
+    result["singleton_fraction"] = (
+        singleton_ratio_array * singleton_ratio_orig / singleton_norm_factor
+    )
+    result["allele_fraction"] = allele_fraction_array / allele_norm_factor
+    return result
 
 
 def query_allele_frequencies(df_reference, df_target):
@@ -821,3 +909,230 @@ def plot_venn2(data_1, data_2, labels=["1", "2"]):
         text.set_fontsize(16)
     for text in vd3.subset_labels:
         text.set_fontsize(16)
+
+
+def sub_sample(df, size=1000, replace=True):
+    dist = np.array(df["UMI_count"] / np.sum(df["UMI_count"]))
+    sel_idx = np.random.choice(np.arange(len(df)), size=size, p=dist, replace=replace)
+    return df.iloc[sel_idx].drop_duplicates("allele")
+
+
+def check_allele_frequency_prediction(
+    df, UMI_cutoff=30, mutation_N_cutoff=1, markersize=25, df_mutation=None
+):
+    if df_mutation is None:
+        df_mutation = mutation_frequency(df, plot=False)
+    
+    df_mutation = df_mutation.set_index("mutation")
+    norm_factor = df_mutation["UMI_count"].sum()
+    df_mutation["Frequency"] = df_mutation["UMI_count"].apply(lambda x: x / norm_factor)
+
+    df["mutation_N"] = df["allele"].apply(lambda x: len(x.split(",")))
+    df_test = df[(df.UMI_count > UMI_cutoff) & (df["mutation_N"] > mutation_N_cutoff)]
+    tot_observations = np.sum(df["UMI_count"] * df["mutation_N"])
+
+    predicted_frequency = []
+    for allele_tmp in df_test["allele"]:
+        freq = 1
+        for x in allele_tmp.split(","):
+            freq = freq * df_mutation.loc[x]["Frequency"]
+        freq = freq * tot_observations
+        predicted_frequency.append(freq)
+    df_test["Predicted_Freq"] = predicted_frequency
+
+    fig, ax = plt.subplots()
+    df_test = df_test.sort_values("UMI_count", ascending=True)
+    ax = sns.scatterplot(
+        data=df_test,
+        x="UMI_count",
+        y="Predicted_Freq",
+        s=markersize,
+        alpha=1,
+        edgecolor="k",
+    )
+    plt.yscale("log")
+    plt.xscale("log")
+    return df_test
+
+
+def generate_synthetic_alleles(
+    df_allele: pd.DataFrame,
+    target_sample_N: int = 10 ** 4,
+    max_mutation_N: int = 5,
+    random_seed=123,
+):
+    """
+    Parameters
+    ----------
+    df_allele:
+        pandas dataframe for allele count
+    target_sample_N:
+        target sequence number to sample
+    max_mutation_N:
+        Maximum number of mutations in a synthetic allele. This is usefual because if the mutation_N is too big,
+        like 10, then it is really hard to find 5 mutations that would satisfy the constraints of an valid allele.
+    random_seed:
+        random seed of the generation process. Using the same seed, the result is deterministic.
+
+    Returns
+    -------
+    df_synthesis:
+        pandas dataframe for synthetic allele count
+    """
+
+    np.random.seed(random_seed)
+
+    ## extract the mutation data from the allele data
+    df_mutation = mutation_frequency(df_allele, plot=False)
+    norm_factor = df_mutation["UMI_count"].sum()
+    df_mutation["Frequency"] = df_mutation["UMI_count"] / norm_factor
+
+    ## extract the start and end position of a mutation
+    start_L = np.zeros(len(df_mutation)) - 10
+    end_L = np.zeros(len(df_mutation)) - 10
+    for j, x in enumerate(df_mutation["mutation"]):
+        if "del" in x:  # del or delins
+            temp = x.split("del")[0].split("_")
+            start_L[j] = temp[0]
+            end_L[j] = temp[1]
+        elif "ins" in x:  # ins
+            temp = x.split("ins")[0].split("_")
+            start_L[j] = temp[0]
+            end_L[j] = temp[1]
+        elif ">" in x:
+            temp = x.split(">")[0][:-1]
+            start_L[j] = temp
+            end_L[j] = temp
+    df_mutation["start_position"] = start_L.astype(int)
+    df_mutation["end_position"] = end_L.astype(int)
+
+    ## extract mutation number histogram
+    mut_per_allele = mutations_per_allele(df_allele)
+    mut_per_UMI = np.concatenate(
+        [[mut_per_allele[i]] * int(x) for i, x in enumerate(df_allele["UMI_count"])]
+    )
+    mut_hist_y, mut_hist_x = np.histogram(mut_per_UMI, bins=np.arange(17))
+    mut_hist_UMI = mut_hist_y / np.sum(mut_hist_y)
+
+    ## generate data for different types of mutations, within each type, we normalize the sampling frequency
+    df_mutation["delins"] = df_mutation["mutation"].apply(lambda x: "delins" in x)
+    df_mutation["del"] = df_mutation["mutation"].apply(
+        lambda x: ("del" in x) and ("ins" not in x)
+    )
+    df_mutation["ins"] = df_mutation["mutation"].apply(
+        lambda x: ("del" not in x) and ("ins" in x)
+    )
+    df_mutation["others"] = df_mutation["mutation"].apply(
+        lambda x: ("del" not in x) and ("ins" not in x)
+    )
+
+    df_delins = df_mutation[df_mutation["delins"]].filter(
+        ["mutation", "UMI_count", "Frequency", "start_position", "end_position"]
+    )
+    df_delins["Frequency"] = df_delins["Frequency"] / df_delins["Frequency"].sum()
+    df_del = df_mutation[df_mutation["del"]].filter(
+        ["mutation", "UMI_count", "Frequency", "start_position", "end_position"]
+    )
+    df_del["Frequency"] = df_del["Frequency"] / df_del["Frequency"].sum()
+    df_ins = df_mutation[df_mutation["ins"]].filter(
+        ["mutation", "UMI_count", "Frequency", "start_position", "end_position"]
+    )
+    df_ins["Frequency"] = df_ins["Frequency"] / df_ins["Frequency"].sum()
+    df_others = df_mutation[df_mutation["others"]].filter(
+        ["mutation", "UMI_count", "Frequency", "start_position", "end_position"]
+    )
+    df_others["Frequency"] = df_others["Frequency"] / df_others["Frequency"].sum()
+    # df_others=df_others[df_others.mutation!='[]']
+    df_list = [df_delins, df_del, df_ins, df_others]
+
+    ## estimate probability for different types of mutations
+    # mutation_type_prob=[len(df_delins), len(df_del), len(df_ins), len(df_others)] # by allele
+    mutation_type_prob = [
+        df_delins["UMI_count"].sum(),
+        df_del["UMI_count"].sum(),
+        df_ins["UMI_count"].sum(),
+        df_others["UMI_count"].sum(),
+    ]  # by UMI
+    mutation_type_prob = np.array(mutation_type_prob) / np.sum(mutation_type_prob)
+
+    ## generate the random number before the actual computation
+    prob = mut_hist_UMI[: (max_mutation_N + 1)]
+    mutation_N_array = np.random.choice(
+        mut_hist_x[: (max_mutation_N + 1)], size=target_sample_N, p=prob / np.sum(prob)
+    )
+    type_id_array = np.random.choice(
+        np.arange(4),
+        size=int(target_sample_N * np.mean(mutation_N_array)),
+        p=mutation_type_prob,
+    )
+    mutation_id_list = []
+    for cur_id in range(len(df_list)):
+        print(f"Current id: {cur_id}")
+        size = 500 * target_sample_N * mutation_type_prob[cur_id]
+        type_id = np.random.choice(
+            np.arange(len(df_list[cur_id])),
+            size=int(size),
+            p=df_list[cur_id]["Frequency"],
+        )
+        mutation_id_list.append(type_id)
+
+    from tqdm import tqdm
+
+    ## initialize the simulation
+    type_id_cur = 0
+    mutation_type_start = np.array([0, 0, 0, 0])
+    mutation_type_start_max = np.array([len(x) - 2 for x in mutation_id_list])
+    new_allele_array = []
+    for j in tqdm(range(target_sample_N)):
+        mutation_N = mutation_N_array[j]
+        # print(f'round {j}; current mutation number {mutation_N}')
+
+        # select number of mutations in this allele
+        type_id_end = type_id_cur + mutation_N
+        type_id_temp = type_id_array[type_id_cur:type_id_end]
+        type_id_cur = type_id_end
+
+        ## select mutations from different types
+        success = False
+        while (success is False) and (
+            mutation_type_start < mutation_type_start_max
+        ).all():
+            sel_mutations = []
+            start_position_array = []
+            end_position_array = []
+            for x in type_id_temp:
+                start_temp = mutation_type_start[x]
+                mutation_type_start[x] += 1
+                mutation_index = mutation_id_list[x][start_temp]
+                mutation_temp = df_list[x].iloc[mutation_index]
+                sel_mutations.append(mutation_temp)
+                start_position_array.append(mutation_temp["start_position"])
+                end_position_array.append(mutation_temp["end_position"])
+
+            ## check if the selection is reasonable
+            reorder_idx_start = np.argsort(start_position_array).flatten()
+            reorder_idx_end = np.argsort(end_position_array).flatten()
+            unique_start = len(set(start_position_array)) == len(start_position_array)
+            unique_end = len(set(start_position_array)) == len(start_position_array)
+            if (
+                (reorder_idx_start == reorder_idx_end).all()
+                and unique_start
+                and unique_end
+            ):  # they should satisfy the same ordering
+                new_alleles = ",".join(
+                    [
+                        sel_mutations[i0]["mutation"]
+                        for i0 in reorder_idx_start.flatten()
+                    ]
+                )
+                new_allele_array.append(new_alleles)
+                success = True
+            # otherwise, go for the next while loop
+
+        if (mutation_type_start >= mutation_type_start_max).any():
+            print("mutation type data insufficient. Break")
+            break
+
+    df_synthesis = pd.DataFrame({"allele": new_allele_array})
+    df_synthesis["UMI_count"] = 1
+    return df_synthesis.groupby("allele").agg({"UMI_count": "sum"})
