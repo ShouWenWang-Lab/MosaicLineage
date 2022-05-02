@@ -225,3 +225,51 @@ def custom_fate_bias_heatmap(
         final_x_ticks=True,
         exclude_fates=conditional_fates[:2],
     )
+
+
+def reverse_compliment(seq):
+    reverse = np.array(list(seq))[::-1]
+    map_seq = {"A": "T", "C": "G", "T": "A", "G": "C"}
+    complement = "".join([map_seq[x] for x in reverse])
+    return complement
+
+
+def read_quality_checks(
+    path_to_fastq, UMI_length, primer3_length=20, primer5_length=20
+):
+
+    f = open(path_to_fastq, "r")
+    data = f.readlines()
+    seq = []
+    for j in range(int(len(data) / 4)):
+        seq.append(data[4 * j + 1].strip("\n"))
+
+    df = pd.DataFrame({"seq": seq})
+    df["UMI"] = df["seq"].apply(lambda x: x[:UMI_length])
+    df["3primer"] = df["seq"].apply(
+        lambda x: x[UMI_length : (UMI_length + primer3_length)]
+    )
+    df["CARLIN"] = df["seq"].apply(
+        lambda x: x[(UMI_length + primer3_length) : -primer5_length]
+    )
+    df["5primer"] = df["seq"].apply(lambda x: x[-primer5_length:])
+
+    df_temp = (
+        df.groupby("3primer")
+        .agg({"3primer": "count"})
+        .rename(columns={"3primer": "3primer_count"})
+    )
+    df_3 = df_temp.sort_values("3primer_count").reset_index()
+    primer_3_fraction = df_3["3primer_count"].max() / df_3["3primer_count"].sum()
+
+    df_temp = (
+        df.groupby("5primer")
+        .agg({"5primer": "count"})
+        .rename(columns={"5primer": "5primer_count"})
+    )
+    df_5 = df_temp.sort_values("5primer_count").reset_index()
+    primer_5_fraction = df_5["5primer_count"].max() / df_5["5primer_count"].sum()
+
+    print(f"Top_1 primer_3 fraction: {primer_3_fraction}")
+    print(f"Top_1 primer_5 fraction: {primer_5_fraction}")
+    return df, df_3, df_5
