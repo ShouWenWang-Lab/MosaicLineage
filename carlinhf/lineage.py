@@ -205,6 +205,45 @@ def mutations_length_per_allele_ins_del(df_input):
     return ins_per_allele, del_per_allele
 
 
+def mutations_deletion_statistics(df_input):
+    """
+    Record initial and final deletion position and the corresponding mutant
+    """
+
+    del_per_allele = []
+    mutation_record = []
+    for i, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
+        for y in x:
+            if "del" in y:
+                temp = y.split("del")[0].split("_")
+                del_len = int(temp[1]) - int(temp[0])
+                del_per_allele.append([del_len, temp[0], temp[1]])
+                mutation_record.append(y)
+
+    periodic_record = []
+    for j, x in enumerate(del_per_allele):
+        periodic_record.append(x + [mutation_record[j]])
+
+    my_dict = {}
+    my_dict["del_length"] = np.array(periodic_record)[:, 0].astype(int)
+    my_dict["del_initial"] = np.array(periodic_record)[:, 1].astype(int)
+    my_dict["del_end"] = np.array(periodic_record)[:, 2].astype(int)
+    my_dict["mutation"] = np.array(periodic_record)[:, 3]
+
+    ins_length_array = []
+    for x in my_dict["mutation"]:
+        if "ins" in x:
+            ins_len = len(list(x.split("ins")[1]))
+            ins_length_array.append(ins_len)
+        else:
+            ins_length_array.append(0)
+
+    my_dict["ins_length"] = ins_length_array
+    df = pd.DataFrame(my_dict)
+
+    return df
+
+
 def mutation_frequency(df_input, save=False, save_path=".", plot=True):
     """
     df_Input: should ahve 'allele' and 'UMI_count'
@@ -355,7 +394,9 @@ def subsample_allele_frequency_count(df_input, sp_fraction, out_dir):
     df_sp.to_csv(f"{data_path}/FrequencyCounts.csv", header=None)
 
 
-def subsample_allele_freq_histogram(df, sample_key, sample_fraction=0.1, plot=True):
+def subsample_allele_freq_histogram(
+    df, sample_key="sample_key", sample_fraction=0.1, plot=True
+):
 
     df["allele_frequency"] = df["UMI_count"] / df["UMI_count"].sum()
     sel_idx = np.random.choice(
@@ -918,13 +959,19 @@ def sub_sample(df, size=1000, replace=True):
 
 
 def check_allele_frequency_prediction(
-    df, UMI_cutoff=30, mutation_N_cutoff=1, markersize=25, df_mutation=None
+    df,
+    UMI_cutoff=30,
+    mutation_N_cutoff=1,
+    markersize=25,
+    df_mutation=None,
+    norm_factor=None,
 ):
     if df_mutation is None:
         df_mutation = mutation_frequency(df, plot=False)
 
     df_mutation = df_mutation.set_index("mutation")
-    norm_factor = df_mutation["UMI_count"].sum()
+    if norm_factor is None:
+        norm_factor = df_mutation["UMI_count"].sum()
     df_mutation["Frequency"] = df_mutation["UMI_count"].apply(lambda x: x / norm_factor)
 
     df["mutation_N"] = df["allele"].apply(lambda x: len(x.split(",")))
@@ -1083,6 +1130,7 @@ def generate_synthetic_alleles(
     mutation_type_start = np.array([0, 0, 0, 0])
     mutation_type_start_max = np.array([len(x) - 2 for x in mutation_id_list])
     new_allele_array = []
+    predicted_frequency_array = []
     for j in tqdm(range(target_sample_N)):
         mutation_N = mutation_N_array[j]
         # print(f'round {j}; current mutation number {mutation_N}')
@@ -1100,6 +1148,7 @@ def generate_synthetic_alleles(
             sel_mutations = []
             start_position_array = []
             end_position_array = []
+            frequency = []
             for x in type_id_temp:
                 start_temp = mutation_type_start[x]
                 mutation_type_start[x] += 1
@@ -1108,6 +1157,7 @@ def generate_synthetic_alleles(
                 sel_mutations.append(mutation_temp)
                 start_position_array.append(mutation_temp["start_position"])
                 end_position_array.append(mutation_temp["end_position"])
+                frequency.append(mutation_temp["Frequency"])
 
             ## check if the selection is reasonable
             reorder_idx_start = np.argsort(start_position_array).flatten()
@@ -1126,6 +1176,7 @@ def generate_synthetic_alleles(
                     ]
                 )
                 new_allele_array.append(new_alleles)
+                predicted_frequency_array.append(np.prod(frequency))
                 success = True
             # otherwise, go for the next while loop
 
@@ -1133,6 +1184,12 @@ def generate_synthetic_alleles(
             print("mutation type data insufficient. Break")
             break
 
-    df_synthesis = pd.DataFrame({"allele": new_allele_array})
+    df_synthesis = pd.DataFrame(
+        {"allele": new_allele_array, "Predicted_frequency": predicted_frequency_array}
+    )
     df_synthesis["UMI_count"] = 1
-    return df_synthesis.groupby("allele").agg({"UMI_count": "sum"}).reset_index()
+    return (
+        df_synthesis.groupby("allele")
+        .agg({"UMI_count": "sum", "Predicted_frequency": "mean"})
+        .reset_index()
+    )
