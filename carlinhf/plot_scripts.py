@@ -841,3 +841,156 @@ def insertion_del_freq_histogram(df, sample_key):
     add_shade(ax)
     plt.tight_layout()
     plt.savefig(f"figure/{sample_key}/ins_del_freq_histogram_normal_scale.pdf")
+
+
+def plot_deletion_statistics(df):
+    fig, ax = plt.subplots()
+    sns.scatterplot(data=df, x="del_initial", y="del_end", s=0.5, alpha=0.1)
+
+    count_data, location = np.histogram(df["del_initial"], bins=np.arange(270))
+    max_info = []
+    for x in range(10):
+        idx = np.arange(x * 27, (x + 1) * 27 - 1)
+        cur = np.argmax(count_data[idx])
+        max_info.append([count_data[idx][cur], location[idx][cur]])
+
+    fig, ax = plt.subplots()
+    ax = sns.histplot(data=df, x="del_initial", bins=200)
+    for i in range(len(max_info)):
+        ax.text(max_info[i][1], max_info[i][0], max_info[i][1], fontsize=8)
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.xlabel("Initial location of a deletion mutant")
+
+    count_data, location = np.histogram(df["del_end"], bins=np.arange(270))
+    max_info = []
+    for x in range(10):
+        idx = np.arange(x * 27, (x + 1) * 27 - 1)
+        cur = np.argmax(count_data[idx])
+        max_info.append([count_data[idx][cur], location[idx][cur]])
+
+    fig, ax = plt.subplots()
+    ax = sns.histplot(data=df, x="del_end", bins=200)
+    for i in range(len(max_info)):
+        ax.text(max_info[i][1], max_info[i][0], max_info[i][1], fontsize=8)
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    plt.xlabel("Terminal location of a deletion mutant")
+
+    fig, ax = plt.subplots()
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
+    ax = sns.histplot(data=df, x="ins_length", bins=200)
+    ax.set_xlim([0, 50])
+
+
+def three_locus_comparison(sample_key, data_path_CC, data_path_RC, data_path_TC):
+    df_CC = pd.read_csv(
+        f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
+    ).sort_values("sample")
+    df_CC = df_CC[df_CC["sample"] != "merge_all"]
+    idx = np.argsort(df_CC["edit_UMI_fraction"].to_numpy())
+    df_CC = df_CC.iloc[idx]
+    df_CC["sample_id"] = np.arange(len(df_CC))
+    df_CC["Type"] = "Col"
+    df_RC = pd.read_csv(
+        f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
+    ).sort_values("sample")
+    df_RC = df_RC[df_RC["sample"] != "merge_all"]
+    df_RC = df_RC.iloc[idx]
+    df_RC["sample_id"] = np.arange(len(df_RC))
+    df_RC["Type"] = "Rosa"
+    df_TC = pd.read_csv(
+        f"{data_path_TC}/merge_all/refined_results.csv", index_col=0
+    ).sort_values("sample")
+    df_TC = df_TC[df_TC["sample"] != "merge_all"]
+    df_TC = df_TC.iloc[idx]
+    df_TC["sample_id"] = np.arange(len(df_TC))
+    df_TC["Type"] = "Tigre"
+
+    x = "total_alleles"
+    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
+    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+    df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+    x = "singleton"
+    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
+    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+    df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+    df_all = pd.concat([df_CC, df_RC, df_TC])
+    df_all["singleton_fraction"] = df_all["singleton"] / df_all["total_alleles"]
+    df_all["consensus_calling_fraction"] = (
+        df_all["called_UMIs_total (read_frac)"] / df_all["common_UMIs (read_frac)"]
+    )
+
+    df_sample_association = (
+        df_CC.filter(["sample_id", "sample"])
+        .merge(df_TC.filter(["sample_id", "sample"]), on="sample_id")
+        .merge(df_RC.filter(["sample_id", "sample"]), on="sample_id")
+    )
+    # df_all_norm.filter(['sample_id','sample']).sort_values('sample_id').head(10)
+    # df_all['sample_id']=df_all['sample'].apply(lambda x: x[:-3])
+
+    QC_metric = [
+        "tot_fastq_N",
+        "valid_read_structure (read_frac)",
+        "valid_lines (read_frac)",
+        "common_UMIs (read_frac)",
+        "consensus_calling_fraction",
+    ]
+
+    qc_x_label = [
+        "Total fastq reads",
+        "Read fraction (valid structure)",
+        "Read fraction (valid reads)",
+        "Read fraction (common UMI)",
+        "Read frac. (allele calling)",
+    ]
+
+    performance_metric = [
+        "edit_UMI_fraction",
+        "total_alleles",
+        "singleton",
+        "singleton_fraction",
+        "total_alleles_norm_fraction",
+        "singleton_norm_fraction",
+    ]
+
+    performance_x_label = [
+        "Edited cell fraction (edited UMI fraction)",
+        "Total allele number",
+        "Singleton number",
+        "Singleton fraction",
+        "Percent of alleles within a locus",
+        "Percent of singleton within a locus",
+    ]
+
+    for j, qc in enumerate(QC_metric):
+        g = sns.catplot(
+            data=df_all,
+            x="sample_id",
+            y=qc,
+            hue="Type",
+            kind="bar",
+            edgecolor=".6",
+            aspect=1.2,
+        )
+        g.ax.set_ylabel(qc_x_label[j])
+        g.ax.set_xlabel("Sample ID")
+        g.ax.set_title("QC")
+        # plt.xticks(rotation='vertical');
+        plt.savefig(f"figure/{sample_key}/{qc}.pdf")
+
+    for j, y in enumerate(performance_metric):
+        g = sns.catplot(
+            data=df_all,
+            x="sample_id",
+            y=y,
+            hue="Type",
+            kind="bar",
+            edgecolor=".6",
+            aspect=1.2,
+        )
+        g.ax.set_ylabel(performance_x_label[j])
+        g.ax.set_xlabel("Sample ID")
+        g.ax.set_title("Performance")
+        # plt.xticks(rotation='vertical');
+        plt.savefig(f"figure/{sample_key}/{y}.pdf")
+
+    return df_sample_association
