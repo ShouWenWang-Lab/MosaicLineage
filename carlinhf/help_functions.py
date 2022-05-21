@@ -273,3 +273,68 @@ def read_quality_checks(
     print(f"Top_1 primer_3 fraction: {primer_3_fraction}")
     print(f"Top_1 primer_5 fraction: {primer_5_fraction}")
     return df, df_3, df_5
+
+
+def merge_three_locus(
+    data_path_CC,
+    data_path_RC,
+    data_path_TC=None,
+    sample_type_1="Col",
+    sample_type_2="Rosa",
+    sample_type_3="Tigre",
+):
+
+    df_CC = pd.read_csv(
+        f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
+    ).sort_values("sample")
+    df_CC = df_CC[df_CC["sample"] != "merge_all"]
+    idx = np.argsort(df_CC["edit_UMI_fraction"].to_numpy())
+    df_CC = df_CC.iloc[idx]
+    df_CC["sample_id"] = np.arange(len(df_CC))
+    df_CC["Type"] = sample_type_1
+    df_RC = pd.read_csv(
+        f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
+    ).sort_values("sample")
+    df_RC = df_RC[df_RC["sample"] != "merge_all"]
+    df_RC = df_RC.iloc[idx]
+    df_RC["sample_id"] = np.arange(len(df_RC))
+    df_RC["Type"] = sample_type_2
+
+    x = "total_alleles"
+    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
+    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+    x = "singleton"
+    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
+    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+
+    if data_path_TC is not None:
+        df_TC = pd.read_csv(
+            f"{data_path_TC}/merge_all/refined_results.csv", index_col=0
+        ).sort_values("sample")
+
+        df_TC = df_TC[df_TC["sample"] != "merge_all"]
+        df_TC = df_TC.iloc[idx]
+        df_TC["sample_id"] = np.arange(len(df_TC))
+        df_TC["Type"] = sample_type_3
+
+        x = "total_alleles"
+        df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+        x = "singleton"
+        df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+
+        df_all = pd.concat([df_CC, df_RC, df_TC])
+        df_sample_association = (
+            df_CC.filter(["sample_id", "sample"])
+            .merge(df_TC.filter(["sample_id", "sample"]), on="sample_id")
+            .merge(df_RC.filter(["sample_id", "sample"]), on="sample_id")
+        )
+    else:
+        df_all = pd.concat([df_CC, df_RC])
+        df_sample_association = df_CC.filter(["sample_id", "sample"]).merge(
+            df_RC.filter(["sample_id", "sample"]), on="sample_id"
+        )
+
+    df_sample_association = df_sample_association.rename(
+        columns={"sample_x": "CC", "sample_y": "TC", "sample": "RC"}
+    )
+    return df_all, df_sample_association

@@ -881,51 +881,18 @@ def plot_deletion_statistics(df):
     ax.set_xlim([0, 50])
 
 
-def three_locus_comparison(sample_key, data_path_CC, data_path_RC, data_path_TC):
-    df_CC = pd.read_csv(
-        f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
-    ).sort_values("sample")
-    df_CC = df_CC[df_CC["sample"] != "merge_all"]
-    idx = np.argsort(df_CC["edit_UMI_fraction"].to_numpy())
-    df_CC = df_CC.iloc[idx]
-    df_CC["sample_id"] = np.arange(len(df_CC))
-    df_CC["Type"] = "Col"
-    df_RC = pd.read_csv(
-        f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
-    ).sort_values("sample")
-    df_RC = df_RC[df_RC["sample"] != "merge_all"]
-    df_RC = df_RC.iloc[idx]
-    df_RC["sample_id"] = np.arange(len(df_RC))
-    df_RC["Type"] = "Rosa"
-    df_TC = pd.read_csv(
-        f"{data_path_TC}/merge_all/refined_results.csv", index_col=0
-    ).sort_values("sample")
-    df_TC = df_TC[df_TC["sample"] != "merge_all"]
-    df_TC = df_TC.iloc[idx]
-    df_TC["sample_id"] = np.arange(len(df_TC))
-    df_TC["Type"] = "Tigre"
+def three_locus_comparison_plots(df_all, sample_key):
 
-    x = "total_alleles"
-    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
-    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
-    df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
-    x = "singleton"
-    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
-    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
-    df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
-    df_all = pd.concat([df_CC, df_RC, df_TC])
     df_all["singleton_fraction"] = df_all["singleton"] / df_all["total_alleles"]
     df_all["consensus_calling_fraction"] = (
         df_all["called_UMIs_total (read_frac)"] / df_all["common_UMIs (read_frac)"]
     )
 
-    df_sample_association = (
-        df_CC.filter(["sample_id", "sample"])
-        .merge(df_TC.filter(["sample_id", "sample"]), on="sample_id")
-        .merge(df_RC.filter(["sample_id", "sample"]), on="sample_id")
+    temp = df_all["total_alleles"] / (
+        df_all["tot_fastq_N"] * df_all["valid_lines (read_frac)"]
     )
-    # df_all_norm.filter(['sample_id','sample']).sort_values('sample_id').head(10)
-    # df_all['sample_id']=df_all['sample'].apply(lambda x: x[:-3])
+    temp = temp / np.sum(temp)
+    df_all["Allele output per reads (normalized)"] = temp
 
     QC_metric = [
         "tot_fastq_N",
@@ -950,6 +917,7 @@ def three_locus_comparison(sample_key, data_path_CC, data_path_RC, data_path_TC)
         "singleton_fraction",
         "total_alleles_norm_fraction",
         "singleton_norm_fraction",
+        'Allele output per reads (normalized)',
     ]
 
     performance_x_label = [
@@ -959,6 +927,7 @@ def three_locus_comparison(sample_key, data_path_CC, data_path_RC, data_path_TC)
         "Singleton fraction",
         "Percent of alleles within a locus",
         "Percent of singleton within a locus",
+        'Allele output per reads (normalized)',
     ]
 
     for j, qc in enumerate(QC_metric):
@@ -992,5 +961,3 @@ def three_locus_comparison(sample_key, data_path_CC, data_path_RC, data_path_TC)
         g.ax.set_title("Performance")
         # plt.xticks(rotation='vertical');
         plt.savefig(f"figure/{sample_key}/{y}.pdf")
-
-    return df_sample_association
