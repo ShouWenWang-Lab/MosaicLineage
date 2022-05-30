@@ -896,6 +896,9 @@ def three_locus_comparison_plots(df_all, sample_key):
 
     QC_metric = [
         "tot_fastq_N",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
         "valid_read_structure (read_frac)",
         "valid_lines (read_frac)",
         "common_UMIs (read_frac)",
@@ -904,6 +907,9 @@ def three_locus_comparison_plots(df_all, sample_key):
 
     qc_x_label = [
         "Total fastq reads",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
         "Read fraction (valid structure)",
         "Read fraction (valid reads)",
         "Read fraction (common UMI)",
@@ -917,7 +923,7 @@ def three_locus_comparison_plots(df_all, sample_key):
         "singleton_fraction",
         "total_alleles_norm_fraction",
         "singleton_norm_fraction",
-        'Allele output per reads (normalized)',
+        "Allele output per reads (normalized)",
     ]
 
     performance_x_label = [
@@ -927,7 +933,7 @@ def three_locus_comparison_plots(df_all, sample_key):
         "Singleton fraction",
         "Percent of alleles within a locus",
         "Percent of singleton within a locus",
-        'Allele output per reads (normalized)',
+        "Allele output per reads (normalized)",
     ]
 
     for j, qc in enumerate(QC_metric):
@@ -941,8 +947,9 @@ def three_locus_comparison_plots(df_all, sample_key):
             aspect=1.2,
         )
         g.ax.set_ylabel(qc_x_label[j])
-        g.ax.set_xlabel("Sample ID")
+        g.ax.set_xlabel("")
         g.ax.set_title("QC")
+        plt.xticks(rotation=90)
         # plt.xticks(rotation='vertical');
         plt.savefig(f"figure/{sample_key}/{qc}.pdf")
 
@@ -957,7 +964,8 @@ def three_locus_comparison_plots(df_all, sample_key):
             aspect=1.2,
         )
         g.ax.set_ylabel(performance_x_label[j])
-        g.ax.set_xlabel("Sample ID")
+        g.ax.set_xlabel("")
         g.ax.set_title("Performance")
+        plt.xticks(rotation=90)
         # plt.xticks(rotation='vertical');
         plt.savefig(f"figure/{sample_key}/{y}.pdf")
