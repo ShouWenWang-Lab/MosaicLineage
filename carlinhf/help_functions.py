@@ -10,6 +10,8 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as ssp
 import seaborn as sns
+import source.help_functions as snakehf
+import yaml
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
 
@@ -288,7 +290,7 @@ def merge_three_locus(
         f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
     ).sort_values("sample")
     df_CC = df_CC[df_CC["sample"] != "merge_all"]
-    idx = np.argsort(df_CC["edit_UMI_fraction"].to_numpy())
+    idx = np.argsort(df_CC["sample"])
     df_CC = df_CC.iloc[idx]
     df_CC["sample_id"] = np.arange(len(df_CC))
     df_CC["Type"] = sample_type_1
@@ -296,6 +298,7 @@ def merge_three_locus(
         f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
     ).sort_values("sample")
     df_RC = df_RC[df_RC["sample"] != "merge_all"]
+    idx = np.argsort(df_RC["sample"])
     df_RC = df_RC.iloc[idx]
     df_RC["sample_id"] = np.arange(len(df_RC))
     df_RC["Type"] = sample_type_2
@@ -311,8 +314,8 @@ def merge_three_locus(
         df_TC = pd.read_csv(
             f"{data_path_TC}/merge_all/refined_results.csv", index_col=0
         ).sort_values("sample")
-
         df_TC = df_TC[df_TC["sample"] != "merge_all"]
+        idx = np.argsort(df_TC["sample"])
         df_TC = df_TC.iloc[idx]
         df_TC["sample_id"] = np.arange(len(df_TC))
         df_TC["Type"] = sample_type_3
@@ -338,3 +341,88 @@ def merge_three_locus(
         columns={"sample_x": "CC", "sample_y": "TC", "sample": "RC"}
     )
     return df_all, df_sample_association
+
+
+def merge_samples_with_sample_count(
+    target_data_list,
+    read_cutoff=3,
+    root_path="/Users/shouwenwang/Dropbox (HMS)/shared_folder_with_Li/DATA/CARLIN",
+):
+    """
+    target_data_list is a list of data name relative to root_dir
+    An example:
+    target_data_list=[
+       '20220306_bulk_tissues/TC_DNA',
+        '20220306_bulk_tissues/TC_RNA',
+       '20220430_CC_TC_RC/TC']
+    """
+    df_list = []
+    for sample in target_data_list:
+        data_path = f"{root_path}/{sample}"
+        with open(f"{data_path}/config.yaml", "r") as stream:
+            file = yaml.safe_load(stream)
+            SampleList = file["SampleList"]
+            read_cutoff_override = file["read_cutoff_override"]
+
+        for x in read_cutoff_override:
+            if x == read_cutoff:
+                print(f"---{sample}: cutoff: {x}")
+                for sample_temp in SampleList:
+
+                    input_dir = f"{data_path}/CARLIN/results_cutoff_override_{x}"
+
+                    df_allele = snakehf.load_allele_frequency_over_multiple_samples(
+                        input_dir, [sample_temp]
+                    )
+                    df_allele["sample"] = sample_temp
+                    df_list.append(df_allele)
+
+    df_merge = pd.concat(df_list, ignore_index=True)
+    map_dict = {}
+    for x in sorted(set(df_merge["sample"])):
+        mouse = "LL" + x.split("LL")[1][:3]
+        embryo_id = [f"E{j}" for j in range(20)]
+        final_id = mouse
+        for y in embryo_id:
+            if y in x:
+                final_id = final_id + "_" + y
+                break
+        # print(x, ":", final_id)
+        map_dict[x] = final_id
+
+    df_merge["sample_id"] = [map_dict[x] for x in list(df_merge["sample"])]
+
+    df_group = (
+        df_merge.groupby("allele")
+        .agg(
+            UMI_count=("UMI_count", "sum"),
+            sample_count=("sample_id", lambda x: len(set(x))),
+            sample_id=("sample_id", lambda x: set(x)),
+        )
+        .reset_index()
+    )
+
+    ## plot
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax = sns.histplot(data=df_group, x="UMI_count", log_scale=True)
+    plt.yscale("log")
+    singleton_fraction = np.sum(df_group["UMI_count"] == 1) / len(df_group)
+    ax.set_title(f"Singleton frac.: {singleton_fraction:.3f}")
+    ax.set_ylabel("Allele histogram")
+    ax.set_xlabel("Observed frequency (UMI count)")
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax = sns.histplot(data=df_group, x="sample_count", log_scale=True)
+    plt.yscale("log")
+    single_fraction = np.sum(df_group["sample_count"] == 1) / len(df_group)
+    ax.set_title(f"Single sample frac.: {single_fraction:.3f}")
+    ax.set_ylabel("Allele histogram")
+    ax.set_xlabel("Occurence across samples")
+
+    df_ref = df_group.rename(columns={"UMI_count": "expected_count"}).assign(
+        expected_frequency=lambda x: x["expected_count"] / x["expected_count"].sum()
+    )
+    df_ref = df_ref.sort_values(
+        "expected_count", ascending=False
+    )  # .filter(["allele","expected_frequency",'sample_count'])
+    return df_merge, df_ref, map_dict

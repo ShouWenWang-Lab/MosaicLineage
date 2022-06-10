@@ -894,6 +894,8 @@ def three_locus_comparison_plots(df_all, sample_key):
     temp = temp / np.sum(temp)
     df_all["Allele output per reads (normalized)"] = temp
 
+    df_all["UMI_per_clone"] = df_all["UMI_called"] / df_all["total_alleles"]
+
     QC_metric = [
         "tot_fastq_N",
         "valid_5_primer (read_frac)",
@@ -903,6 +905,10 @@ def three_locus_comparison_plots(df_all, sample_key):
         "valid_lines (read_frac)",
         "common_UMIs (read_frac)",
         "consensus_calling_fraction",
+        "UMI_per_cell",
+        "cell_number",
+        "Mean_read_per_edited_UMI",
+        "UMI_per_clone",
     ]
 
     qc_x_label = [
@@ -914,6 +920,10 @@ def three_locus_comparison_plots(df_all, sample_key):
         "Read fraction (valid reads)",
         "Read fraction (common UMI)",
         "Read frac. (allele calling)",
+        "UMI per cell",
+        "Cell number",
+        "Mean reads per edited UMI",
+        "UMI per clone",
     ]
 
     performance_metric = [
@@ -937,35 +947,149 @@ def three_locus_comparison_plots(df_all, sample_key):
     ]
 
     for j, qc in enumerate(QC_metric):
-        g = sns.catplot(
-            data=df_all,
-            x="sample_id",
-            y=qc,
-            hue="Type",
-            kind="bar",
-            edgecolor=".6",
-            aspect=1.2,
-        )
-        g.ax.set_ylabel(qc_x_label[j])
-        g.ax.set_xlabel("")
-        g.ax.set_title("QC")
-        plt.xticks(rotation=90)
-        # plt.xticks(rotation='vertical');
-        plt.savefig(f"figure/{sample_key}/{qc}.pdf")
+        if qc in df_all.columns:
+            g = sns.catplot(
+                data=df_all,
+                x="sample_id",
+                y=qc,
+                hue="Type",
+                kind="bar",
+                edgecolor=".6",
+                aspect=1.2,
+                hue_order=["Col", "Tigre", "Rosa"],
+            )
+            g.ax.set_ylabel(qc_x_label[j])
+            g.ax.set_xlabel("")
+            g.ax.set_title("QC")
+            plt.xticks(rotation=90)
+            # plt.xticks(rotation='vertical');
+            plt.savefig(f"figure/{sample_key}/{qc}.pdf")
+        else:
+            print(f"{qc} not found in df_all")
 
     for j, y in enumerate(performance_metric):
-        g = sns.catplot(
-            data=df_all,
-            x="sample_id",
-            y=y,
-            hue="Type",
-            kind="bar",
-            edgecolor=".6",
-            aspect=1.2,
-        )
-        g.ax.set_ylabel(performance_x_label[j])
-        g.ax.set_xlabel("")
-        g.ax.set_title("Performance")
-        plt.xticks(rotation=90)
-        # plt.xticks(rotation='vertical');
-        plt.savefig(f"figure/{sample_key}/{y}.pdf")
+        if y in df_all.columns:
+            g = sns.catplot(
+                data=df_all,
+                x="sample_id",
+                y=y,
+                hue="Type",
+                kind="bar",
+                edgecolor=".6",
+                aspect=1.2,
+                hue_order=["Col", "Tigre", "Rosa"],
+            )
+            g.ax.set_ylabel(performance_x_label[j])
+            g.ax.set_xlabel("")
+            g.ax.set_title("Performance")
+            plt.xticks(rotation=90)
+            # plt.xticks(rotation='vertical');
+            plt.savefig(f"figure/{sample_key}/{y}.pdf")
+        else:
+            print(f"{y} not found in df_all")
+
+
+def analyze_cell_coupling(data_path, SampleList, df_ref):
+    """
+    Analyze CARLIN clonal data, show the fate coupling etc.
+    """
+
+    pseudo_count = 0.0001  # for heatmap plot
+    selected_fates = [x.split("_")[0] for x in SampleList]
+
+    tmp_list = []
+    for sample in sorted(SampleList):
+        base_dir = os.path.join(data_path, sample)
+        df_tmp = lineage.load_allele_info(base_dir)
+        # print(f"Sample (before removing frequent alleles): {sample}; allele number: {len(df_tmp)}")
+        df_tmp["sample"] = sample.split("_")[0]
+        df_tmp["mouse"] = sample.split("-")[0]
+        tmp_list.append(df_tmp)
+    df_all_0 = pd.concat(tmp_list).rename(columns={"UMI_count": "obs_UMI_count"})
+    df_HQ = df_all_0[~df_all_0.allele.isin(df_ref[df_ref["invalid_alleles"]].allele)]
+
+    print("Clone number (before correction): {}".format(len(set(df_all_0["allele"]))))
+    print("Cell number (before correction): {}".format(len(df_all_0["allele"])))
+    print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
+    print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
+
+    adata = lineage.generate_adata_sample_by_allele(df_HQ)
+
+    # sample number histogram
+    sample_num_per_clone = (adata.obsm["X_clone"] > 0).sum(0).A.flatten()
+    fig, ax = plt.subplots()
+    plt.hist(sample_num_per_clone)
+    # plt.yscale('log')
+    plt.xlabel("Number of samples")
+    plt.ylabel("Histogram")
+
+    # barcode heatmap
+    adata.uns["data_des"] = ["coarse"]
+    cs.settings.set_figure_params(
+        format="png", figsize=[4, 4], dpi=75, fontsize=15, pointsize=2
+    )
+    cs.pl.barcode_heatmap(
+        adata,
+        selected_fates=selected_fates,
+        color_bar=True,
+        fig_width=6,
+        fig_height=10,
+        log_transform=True,
+        order_map_x=False,
+        plot=False,
+    )
+
+    coarse_X_clone = adata.uns["barcode_heatmap"]["coarse_X_clone"]
+    fate_names = adata.uns["barcode_heatmap"]["fate_names"]
+
+    final_matrix = lineage.custom_hierachical_ordering(
+        np.arange(coarse_X_clone.shape[0]), coarse_X_clone
+    )
+    cs.pl.heatmap(
+        (final_matrix > 0).T + pseudo_count,
+        order_map_x=False,
+        order_map_y=False,
+        x_ticks=fate_names,
+        color_bar_label="Barcode count",
+        fig_height=10,
+        fig_width=8,
+    )
+
+    # cell count
+    fig, ax = plt.subplots()
+    plt.bar(
+        np.arange(coarse_X_clone.shape[0]),
+        (coarse_X_clone > 0).sum(1),
+        tick_label=fate_names,
+    )
+    plt.xticks(rotation="vertical")
+    plt.ylabel("Clone number")
+
+    # hierarchy
+    cs.tl.fate_hierarchy(adata, source="X_clone")
+    cs.plotting.fate_hierarchy(adata, source="X_clone")
+
+    # fate coupling
+    cs.tl.fate_coupling(adata, method="SW", source="X_clone")
+    cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+    cs.plotting.fate_coupling(adata, source="X_clone", vmin=0)
+
+    # correlation
+    # adata.obs['time_info']=adata.obs['state_info'].apply(lambda x: x.split('-')[1])
+    # df=cs.tl.get_normalized_coarse_X_clone(adata,selected_fates)
+
+    # df_t=df.iloc[:7]
+    # coarse_X_clone=df_t.to_numpy()
+
+    # color_map=plt.cm.coolwarm
+    # # ax=cs.pl.heatmap(coarse_X_clone,order_map_x=True,order_map_y=False,
+    # #                  y_ticks=df.index,fig_width=10,
+    # #                  color_bar_label='Normalized fraction')
+    # # ax.set_xlabel('Clone ID')
+    # # ax.set_title('Intra cell-type & clone normalization')
+
+    # ax=cs.pl.heatmap(np.corrcoef(coarse_X_clone),order_map_x=True,order_map_y=True,
+    #                  x_ticks=selected_fates,y_ticks=selected_fates,color_bar_label='Pearson correlation',
+    #                 fig_height=6,fig_width=8,color_map=color_map,vmax=0.3,vmin=-0.3)
+    # ax.set_title('Pan-celltype correlation')
+    return adata
