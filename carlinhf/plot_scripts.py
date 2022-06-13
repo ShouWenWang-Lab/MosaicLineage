@@ -3,6 +3,7 @@ import os
 import cospar as cs
 import numpy as np
 import pandas as pd
+import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
@@ -989,17 +990,36 @@ def three_locus_comparison_plots(df_all, sample_key):
             print(f"{y} not found in df_all")
 
 
-def analyze_cell_coupling(data_path, SampleList, df_ref):
+def analyze_cell_coupling(data_path, SampleList, df_ref, short_names=None, source=None):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
     """
-
     pseudo_count = 0.0001  # for heatmap plot
-    selected_fates = [x.split("_")[0] for x in SampleList]
+    selected_fates = []
+    short_names_mock = []
+    Flat_SampleList = []
+    for x in SampleList:
+        if type(x) is list:
+            sub_list = [y.split("_")[0] for y in x]
+            selected_fates.append(sub_list)
+            short_names_mock.append("_".join(sub_list))
+            Flat_SampleList += x
+        else:
+            selected_fates.append(x.split("_")[0])
+            short_names_mock.append(x.split("_")[0])
+            Flat_SampleList.append(x)
+
+    if short_names is None:
+        short_names = short_names_mock
 
     tmp_list = []
-    for sample in sorted(SampleList):
-        base_dir = os.path.join(data_path, sample)
+    for sample in sorted(Flat_SampleList):
+        if source is not None:
+            sample_file = sample + "." + source
+        else:
+            sample_file = sample
+
+        base_dir = os.path.join(data_path, sample_file)
         df_tmp = lineage.load_allele_info(base_dir)
         # print(f"Sample (before removing frequent alleles): {sample}; allele number: {len(df_tmp)}")
         df_tmp["sample"] = sample.split("_")[0]
@@ -1013,34 +1033,34 @@ def analyze_cell_coupling(data_path, SampleList, df_ref):
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
-    adata = lineage.generate_adata_sample_by_allele(df_HQ)
+    adata_0 = lineage.generate_adata_sample_by_allele(df_HQ)
 
     # sample number histogram
-    sample_num_per_clone = (adata.obsm["X_clone"] > 0).sum(0).A.flatten()
+    sample_num_per_clone = (adata_0.obsm["X_clone"] > 0).sum(0).A.flatten()
     fig, ax = plt.subplots()
     plt.hist(sample_num_per_clone)
     # plt.yscale('log')
-    plt.xlabel("Number of samples")
+    plt.xlabel("Number of samples per clone")
     plt.ylabel("Histogram")
 
     # barcode heatmap
-    adata.uns["data_des"] = ["coarse"]
+    adata_0.uns["data_des"] = ["coarse"]
     cs.settings.set_figure_params(
         format="png", figsize=[4, 4], dpi=75, fontsize=15, pointsize=2
     )
     cs.pl.barcode_heatmap(
-        adata,
+        adata_0,
         selected_fates=selected_fates,
-        color_bar=True,
-        fig_width=6,
-        fig_height=10,
         log_transform=True,
         order_map_x=False,
         plot=False,
     )
+    coarse_X_clone = adata_0.uns["barcode_heatmap"]["coarse_X_clone"]
+    adata = lineage.generate_adata_v0(
+        ssp.csr_matrix(coarse_X_clone), state_info=short_names
+    )
 
-    coarse_X_clone = adata.uns["barcode_heatmap"]["coarse_X_clone"]
-    fate_names = adata.uns["barcode_heatmap"]["fate_names"]
+    fate_names = short_names
 
     final_matrix = lineage.custom_hierachical_ordering(
         np.arange(coarse_X_clone.shape[0]), coarse_X_clone
@@ -1056,7 +1076,7 @@ def analyze_cell_coupling(data_path, SampleList, df_ref):
     )
 
     # cell count
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 4))
     plt.bar(
         np.arange(coarse_X_clone.shape[0]),
         (coarse_X_clone > 0).sum(1),
@@ -1074,22 +1094,32 @@ def analyze_cell_coupling(data_path, SampleList, df_ref):
     cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
     cs.plotting.fate_coupling(adata, source="X_clone", vmin=0)
 
-    # correlation
-    # adata.obs['time_info']=adata.obs['state_info'].apply(lambda x: x.split('-')[1])
-    # df=cs.tl.get_normalized_coarse_X_clone(adata,selected_fates)
+    # # correlation
+    # adata.obs["time_info"] = adata.obs["state_info"].apply(lambda x: x.split("-")[1])
+    # df = cs.tl.get_normalized_coarse_X_clone(adata, short_names)
 
-    # df_t=df.iloc[:7]
-    # coarse_X_clone=df_t.to_numpy()
+    # df_t = df  # .iloc[:7]
+    # coarse_X_clone = df_t.to_numpy()
 
-    # color_map=plt.cm.coolwarm
+    # color_map = plt.cm.coolwarm
     # # ax=cs.pl.heatmap(coarse_X_clone,order_map_x=True,order_map_y=False,
     # #                  y_ticks=df.index,fig_width=10,
     # #                  color_bar_label='Normalized fraction')
     # # ax.set_xlabel('Clone ID')
     # # ax.set_title('Intra cell-type & clone normalization')
 
-    # ax=cs.pl.heatmap(np.corrcoef(coarse_X_clone),order_map_x=True,order_map_y=True,
-    #                  x_ticks=selected_fates,y_ticks=selected_fates,color_bar_label='Pearson correlation',
-    #                 fig_height=6,fig_width=8,color_map=color_map,vmax=0.3,vmin=-0.3)
-    # ax.set_title('Pan-celltype correlation')
+    # ax = cs.pl.heatmap(
+    #     np.corrcoef(coarse_X_clone),
+    #     order_map_x=True,
+    #     order_map_y=True,
+    #     x_ticks=short_names,
+    #     y_ticks=short_names,
+    #     color_bar_label="Pearson correlation",
+    #     fig_height=6,
+    #     fig_width=8,
+    #     color_map=color_map,
+    #     # vmax=0.3,
+    #     # vmin=-0.3,
+    # )
+    # ax.set_title("Pan-celltype correlation")
     return adata
