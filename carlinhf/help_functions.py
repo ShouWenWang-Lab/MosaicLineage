@@ -426,3 +426,68 @@ def merge_samples_with_sample_count(
         "expected_count", ascending=False
     )  # .filter(["allele","expected_frequency",'sample_count'])
     return df_merge, df_ref, map_dict
+
+def evaluate_perturbation_effects(
+    adata,cluster_key='leiden',
+    perturb_key='perturbation',title=''):
+    df=pd.DataFrame({cluster_key:adata.obs[cluster_key],perturb_key:adata.obs[perturb_key]})
+    df=df.groupby([cluster_key,perturb_key]).agg(count=(perturb_key,'count')).reset_index()
+    df=df[~((df[perturb_key]=='nan') | (df[perturb_key]=='unmapped'))] 
+    #df.to_csv(f'{data_out_dir}/cell_type_by_{perturb_key}_count_data_{title}.csv',index=0)
+    ax=df.pivot(index=cluster_key,columns=perturb_key,values='count')['control'].plot(kind='bar',figsize=(8,3))
+    ax.set_ylabel('Cell number')
+
+    # raw counts
+    df_1=df.pivot(index=cluster_key,columns=perturb_key,values='count')
+    ax=cs.pl.heatmap(df_1.to_numpy(),
+                  order_map_x=False,
+                  order_map_y=False,
+                  color_map=plt.cm.coolwarm,
+                  fig_width=len(df_1.columns)/2,
+                  fig_height=len(df_1.index)/4,
+                  x_ticks=list(df_1.columns),
+                  y_ticks=list(df_1.index),
+                  color_bar_label='Row counts')
+    ax.set_title(title);
+    
+    # normalize within each condition and then normalize by control count 
+    df_1=df.pivot(index=cluster_key,columns=perturb_key,values='count')
+    df_1.loc[:,:]=df_1.values/np.sum(df_1.values,0)[np.newaxis,:]
+    control_N=pd.DataFrame(df_1['control'])
+    for x in df_1.columns:
+        df_1[x]=df_1[x]/(0.0001+df_1['control'])
+
+    ax=cs.pl.heatmap(df_1.to_numpy(),
+                  order_map_x=False,
+                  order_map_y=False,
+                  color_map=plt.cm.coolwarm,
+                  fig_width=len(df_1.columns)/2,
+                  fig_height=len(df_1.index)/4,
+                  x_ticks=list(df_1.columns),
+                  y_ticks=list(df_1.index),
+                  color_bar_label='Relative to control')
+    ax.set_title(title);
+
+    # 'zscore', substract the control count then by the std within each cluster
+    df_1=df.pivot(index=cluster_key,columns=perturb_key,values='count')
+    df_1.loc[:,:]=df_1.values/np.sum(df_1.values,0)[np.newaxis,:]
+    control_N=df_1['control']
+    df_tmp=df_1.T
+    for x in df_tmp.columns:
+        #df_tmp[x]=df_tmp[x]/(1+df_tmp['control'])
+        df_tmp[x]=(df_tmp[x]-df_tmp.loc['control'][x])/np.std(df_tmp[x])
+
+    df_1=df_tmp.T
+
+    ax=cs.pl.heatmap(df_1.to_numpy(),
+                  order_map_x=False,
+                  order_map_y=False,
+                  color_map=plt.cm.coolwarm,
+                  fig_width=len(df_1.columns)/2,
+                  fig_height=len(df_1.index)/4,
+                  x_ticks=list(df_1.columns),
+                  y_ticks=list(df_1.index),
+                  color_bar_label='Z-score within each cluster')
+    ax.set_title(title);
+    
+    return df
