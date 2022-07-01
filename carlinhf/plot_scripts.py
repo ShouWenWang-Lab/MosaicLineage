@@ -990,7 +990,8 @@ def three_locus_comparison_plots(df_all, sample_key):
             print(f"{y} not found in df_all")
 
 
-def analyze_cell_coupling(data_path, SampleList, df_ref, short_names=None, source=None):
+def analyze_cell_coupling(data_path, SampleList, df_ref, 
+short_names=None, source=None,remove_single_lineage_clone=False):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
     """
@@ -1056,24 +1057,29 @@ def analyze_cell_coupling(data_path, SampleList, df_ref, short_names=None, sourc
         plot=False,
     )
     coarse_X_clone = adata_0.uns["barcode_heatmap"]["coarse_X_clone"]
+    if remove_single_lineage_clone:
+        print('Warning: Remove single lineage clones')
+        print('coarse_X_clone shape:',coarse_X_clone.shape)
+        coarse_X_clone=coarse_X_clone[:,(coarse_X_clone>0).sum(0)>1]
+
     adata = lineage.generate_adata_v0(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names
     )
-
+    cs.pl.barcode_heatmap(adata,binarize=True,selected_fates=short_names)
     fate_names = short_names
 
-    final_matrix = lineage.custom_hierachical_ordering(
-        np.arange(coarse_X_clone.shape[0]), coarse_X_clone
-    )
-    cs.pl.heatmap(
-        (final_matrix > 0).T + pseudo_count,
-        order_map_x=False,
-        order_map_y=False,
-        x_ticks=fate_names,
-        color_bar_label="Barcode count",
-        fig_height=10,
-        fig_width=8,
-    )
+    # final_matrix = lineage.custom_hierachical_ordering(
+    #     np.arange(coarse_X_clone.shape[0]), coarse_X_clone
+    # )
+    # cs.pl.heatmap(
+    #     (final_matrix > 0).T + pseudo_count,
+    #     order_map_x=False,
+    #     order_map_y=False,
+    #     x_ticks=fate_names,
+    #     color_bar_label="Barcode count",
+    #     fig_height=10,
+    #     fig_width=8,
+    # )
 
     # cell count
     fig, ax = plt.subplots(figsize=(10, 4))
