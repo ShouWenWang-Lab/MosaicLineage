@@ -276,7 +276,7 @@ def mutation_frequency(df_input, save=False, save_path=".", plot=True):
 def effective_allele_number(UMI_counts):
     x = np.array(UMI_counts) / np.sum(UMI_counts)
     entropy = -np.sum(np.log2(x) * x)
-    return 2 ** entropy
+    return 2**entropy
 
 
 def effective_allele_over_cell_fraction(df_input, editing_efficiency: float = None):
@@ -1004,7 +1004,7 @@ def check_allele_frequency_prediction(
 
 def generate_synthetic_alleles(
     df_allele: pd.DataFrame,
-    target_sample_N: int = 10 ** 4,
+    target_sample_N: int = 10**4,
     max_mutation_N: int = 5,
     random_seed=123,
 ):

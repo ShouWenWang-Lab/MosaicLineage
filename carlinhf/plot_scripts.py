@@ -1,19 +1,21 @@
 import os
+from re import A
 
 import cospar as cs
 import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import seaborn as sns
+import yaml
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
+from nbformat import read
 
+import carlinhf.help_functions as hf
 import carlinhf.LINE1 as line1
 import carlinhf.lineage as lineage
 
-cs.settings.set_figure_params(
-    format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14, pointsize=5
-)
+cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
 
 
@@ -990,54 +992,46 @@ def three_locus_comparison_plots(df_all, sample_key):
             print(f"{y} not found in df_all")
 
 
-def analyze_cell_coupling(data_path, SampleList, df_ref, 
-short_names=None, source=None,remove_single_lineage_clone=False):
+def analyze_cell_coupling(
+    data_path,
+    SampleList,
+    df_ref,
+    short_names=None,
+    source=None,
+    remove_single_lineage_clone=False,
+):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
     """
-    pseudo_count = 0.0001  # for heatmap plot
+    df_all = hf.extract_CARLIN_info(
+        data_path, SampleList, df_ref, short_names=short_names, source=source
+    )
+
     selected_fates = []
     short_names_mock = []
-    Flat_SampleList = []
     for x in SampleList:
         if type(x) is list:
             sub_list = [y.split("_")[0] for y in x]
             selected_fates.append(sub_list)
             short_names_mock.append("_".join(sub_list))
-            Flat_SampleList += x
         else:
             selected_fates.append(x.split("_")[0])
             short_names_mock.append(x.split("_")[0])
-            Flat_SampleList.append(x)
 
     if short_names is None:
         short_names = short_names_mock
 
-    tmp_list = []
-    for sample in sorted(Flat_SampleList):
-        if source is not None:
-            sample_file = sample + "." + source
-        else:
-            sample_file = sample
+    df_HQ = df_all.query("invalid_alleles!=True")
 
-        base_dir = os.path.join(data_path, sample_file)
-        df_tmp = lineage.load_allele_info(base_dir)
-        # print(f"Sample (before removing frequent alleles): {sample}; allele number: {len(df_tmp)}")
-        df_tmp["sample"] = sample.split("_")[0]
-        df_tmp["mouse"] = sample.split("-")[0]
-        tmp_list.append(df_tmp)
-    df_all_0 = pd.concat(tmp_list).rename(columns={"UMI_count": "obs_UMI_count"})
-    df_HQ = df_all_0[~df_all_0.allele.isin(df_ref[df_ref["invalid_alleles"]].allele)]
-
-    print("Clone number (before correction): {}".format(len(set(df_all_0["allele"]))))
-    print("Cell number (before correction): {}".format(len(df_all_0["allele"])))
+    print("Clone number (before correction): {}".format(len(set(df_all["allele"]))))
+    print("Cell number (before correction): {}".format(len(df_all["allele"])))
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
-    adata_0 = lineage.generate_adata_sample_by_allele(df_HQ)
+    adata_orig = lineage.generate_adata_sample_by_allele(df_HQ)
 
     # sample number histogram
-    sample_num_per_clone = (adata_0.obsm["X_clone"] > 0).sum(0).A.flatten()
+    sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
     fig, ax = plt.subplots()
     plt.hist(sample_num_per_clone)
     # plt.yscale('log')
@@ -1045,27 +1039,29 @@ short_names=None, source=None,remove_single_lineage_clone=False):
     plt.ylabel("Histogram")
 
     # barcode heatmap
-    adata_0.uns["data_des"] = ["coarse"]
-    cs.settings.set_figure_params(
-        format="png", figsize=[4, 4], dpi=75, fontsize=15, pointsize=2
-    )
+    adata_orig.uns["data_des"] = ["coarse"]
+    cs.settings.set_figure_params(format="png", figsize=[4, 4], dpi=75, fontsize=15)
     cs.pl.barcode_heatmap(
-        adata_0,
+        adata_orig,
         selected_fates=selected_fates,
         log_transform=True,
         order_map_x=False,
         plot=False,
     )
-    coarse_X_clone = adata_0.uns["barcode_heatmap"]["coarse_X_clone"]
+    coarse_X_clone = adata_orig.uns["barcode_heatmap"]["coarse_X_clone"]
     if remove_single_lineage_clone:
-        print('Warning: Remove single lineage clones')
-        print('coarse_X_clone shape:',coarse_X_clone.shape)
-        coarse_X_clone=coarse_X_clone[:,(coarse_X_clone>0).sum(0)>1]
+        print("Warning: Remove single lineage clones")
+        print("coarse_X_clone shape:", coarse_X_clone.shape)
+        coarse_X_clone = coarse_X_clone[:, (coarse_X_clone > 0).sum(0) > 1]
 
     adata = lineage.generate_adata_v0(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names
     )
-    cs.pl.barcode_heatmap(adata,binarize=True,selected_fates=short_names)
+
+    adata.obs_names = short_names
+    adata.var_names = adata_orig.var_names
+
+    cs.pl.barcode_heatmap(adata, binarize=True, selected_fates=short_names)
     fate_names = short_names
 
     # final_matrix = lineage.custom_hierachical_ordering(
@@ -1128,4 +1124,109 @@ short_names=None, source=None,remove_single_lineage_clone=False):
     #     # vmin=-0.3,
     # )
     # ax.set_title("Pan-celltype correlation")
-    return adata
+    return adata, df_all
+
+
+def annotate_clone_fate(adata, thresh=0.2):
+    adata.obs["mouse"] = [str(x).split("-")[0] for x in adata.obs_names]
+    clone_id = adata.var_names
+    # df = cs.tl.get_normalized_coarse_X_clone(adata, adata.obs_names)
+    norm_X = adata.X.A / adata.X.A.sum(0)  # normalize each clone across all fates
+    fate_list = [",".join(adata.obs_names[x]) for x in norm_X.T > thresh]
+    fate_N = [len(adata.obs_names[x]) for x in norm_X.T > thresh]
+    mouse_N = [len(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
+    mouse_list = [",".join(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
+    df_anno = pd.DataFrame(
+        {
+            "allele": clone_id,
+            "fate": fate_list,
+            "fate_N": fate_N,
+            "fate_mouse_N": mouse_N,
+            "fate_mouse": mouse_list,
+        }
+    )
+
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+    ax = sns.histplot(norm_X[norm_X > 0].flatten(), bins=50, ax=axs[0])
+    ax.set_xlabel("lineage weight")
+    sns.histplot(df_anno["fate_N"], ax=axs[1])
+    sns.histplot(df_anno["fate_mouse_N"], ax=axs[2])
+    plt.tight_layout()
+    return df_anno  # [df_anno["mouse_N"] < 2]
+
+
+def load_single_cell_CARLIN(root_path, plate_map, read_cutoff=2, locus=None):
+    with open(f"{root_path}/config.yaml", "r") as stream:
+        file = yaml.safe_load(stream)
+        SampleList = file["SampleList"]
+
+    df_ref = pd.read_csv(
+        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
+    ).filter(["allele", "expected_frequency", "sample_count"])
+    data_path = os.path.join(
+        root_path, "CARLIN", f"results_cutoff_override_{read_cutoff}"
+    )
+    df_out = hf.extract_CARLIN_info(data_path, SampleList, df_ref)
+    df_out["plate_ID"] = (
+        df_out["sample"].apply(lambda x: x[:-3]).map(plate_map)
+    )  # .astype('category')
+    df_out["locus"] = df_out["sample"].apply(lambda x: x[-2:])
+
+    # df_ref['invalid_alleles']=(df_ref['sample_count']>6) | (df_ref['expected_frequency']>frequency_cutoff)
+    # df_out=df_out.merge(df_clone_fate_CC,on='allele').query('invalid_alleles!=True')
+    return df_out
+
+
+def get_clone_anno(locus, sample_map, Bulk_CARLIN_dir, target_sample):
+    df_all_fate = pd.read_csv(
+        f"{Bulk_CARLIN_dir}/{locus}_CARLIN_{target_sample}_all.csv"
+    )
+    df_all_fate["sample"] = df_all_fate["sample"].map(sample_map).astype("category")
+    adata = lineage.generate_adata_sample_by_allele(df_all_fate)
+    adata.obs_names = adata.obs["state_info"]
+    df_clone_fate = annotate_clone_fate(adata, thresh=0.1)
+    return adata, df_clone_fate
+
+
+def integrate_early_clone_and_fate(
+    df_clone_fate_tmp,
+    SC_CARLIN_dir,
+    plate_map,
+    locus="CC",
+    BC_max_sample_count=5,
+    BC_max_freq=10 ** (-4),
+    read_cutoff=2,
+):
+    root_path = SC_CARLIN_dir + f"/{locus}"
+    df_sc_tmp = load_single_cell_CARLIN(
+        root_path, plate_map, locus=locus, read_cutoff=read_cutoff
+    )
+    df_sc_tmp = df_sc_tmp.merge(df_clone_fate_tmp, on="allele")
+    df_sc_tmp["clone_id"] = f"{locus}_" + df_sc_tmp["allele"]
+
+    df_final_tmp = (
+        df_sc_tmp[df_sc_tmp["mouse"] == df_sc_tmp["fate_mouse"]]
+        .fillna(0)
+        .assign(
+            HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
+            & (x["expected_frequency"] <= BC_max_freq)
+        )
+        .query("HQ==True")
+    )
+
+    CB_list = []
+    CB_flat = []
+    Clone_id_flat = []
+    for j in range(len(df_final_tmp)):
+        df_series = df_final_tmp.iloc[j]
+        plate_id = df_series["plate_ID"]
+        tmp = [plate_id + "_RNA" + "_" + x for x in df_series["CB"].split(",")]
+        CB_list.append(",".join(tmp))
+        CB_flat += tmp
+        Clone_id_flat += [df_series["clone_id"] for _ in tmp]
+
+    df_final_tmp["RNA_id"] = CB_list
+    df_cell_to_BC = pd.DataFrame({"RNA_id": CB_flat, "clone_id": Clone_id_flat}).merge(
+        df_final_tmp.filter(["clone_id", "fate"]), on="clone_id", how="left"
+    )
+    return df_final_tmp, df_cell_to_BC
