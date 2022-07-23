@@ -11,10 +11,10 @@ from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from nbformat import read
 
+import carlinhf.CARLIN as car
 import carlinhf.help_functions as hf
 import carlinhf.LINE1 as line1
 import carlinhf.lineage as lineage
-import carlinhf.CARLIN as car
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
@@ -1003,8 +1003,14 @@ def analyze_cell_coupling(
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
+
+    source:
+        Supfix to the same name, typically {'cCARLIN','Tigre','Rosa'}.
+        Needed for joint profiling
+    short_names:
+        A list of short names for SampleList. no nesting.
     """
-    
+
     selected_fates = []
     short_names_mock = []
     Flat_SampleList = []
@@ -1022,9 +1028,11 @@ def analyze_cell_coupling(
     if short_names is None:
         short_names = short_names_mock
 
-    df_all = car.extract_CARLIN_info(
-        data_path, Flat_SampleList
-    )
+    if source is not None:
+        Flat_SampleList = [x + f".{source}" for x in Flat_SampleList]
+
+    df_all = car.extract_CARLIN_info(data_path, Flat_SampleList)
+    df_all = df_all.merge(df_ref, on="allele", how="left")
 
     df_HQ = df_all.query("invalid_alleles!=True")
 

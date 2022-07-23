@@ -426,5 +426,3 @@ def merge_samples_with_sample_count(
         "expected_count", ascending=False
     )  # .filter(["allele","expected_frequency",'sample_count'])
     return df_merge, df_ref, map_dict
-
-
