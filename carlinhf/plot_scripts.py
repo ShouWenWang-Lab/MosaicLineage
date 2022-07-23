@@ -14,6 +14,7 @@ from nbformat import read
 import carlinhf.help_functions as hf
 import carlinhf.LINE1 as line1
 import carlinhf.lineage as lineage
+import carlinhf.CARLIN as car
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
@@ -1003,23 +1004,27 @@ def analyze_cell_coupling(
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
     """
-    df_all = hf.extract_CARLIN_info(
-        data_path, SampleList, df_ref, short_names=short_names, source=source
-    )
-
+    
     selected_fates = []
     short_names_mock = []
+    Flat_SampleList = []
     for x in SampleList:
         if type(x) is list:
             sub_list = [y.split("_")[0] for y in x]
             selected_fates.append(sub_list)
             short_names_mock.append("_".join(sub_list))
+            Flat_SampleList += x
         else:
             selected_fates.append(x.split("_")[0])
             short_names_mock.append(x.split("_")[0])
+            Flat_SampleList.append(x)
 
     if short_names is None:
         short_names = short_names_mock
+
+    df_all = car.extract_CARLIN_info(
+        data_path, Flat_SampleList
+    )
 
     df_HQ = df_all.query("invalid_alleles!=True")
 
