@@ -17,18 +17,18 @@ from Bio import SeqIO
 import gzip
 from . import larry, lineage
 
-# define seqeunces and primers for QC
-CC_5prime='AGCTGTACAAGTAAGCGGC'
-CC_3prime='AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCT' #'agaattctaactagagctcgctg'
+# define seqeunces and primers for QC. For each 5' sequence, we skip the first 2 bp, and for 3' sequence, we skip the last 2 bp, as they are prone to errors
+CC_5prime='AGCTGTACAAGTAAGCGGC' 
+CC_3prime='AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCT' 
 CC_CARLIN='CGCCGGACTGCACGACAGTCGACGATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATACGATACGCGCACGCTATGGAGTCGAGAGCGCGCTCGTCGACTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGAGTCGAGACGCTGACGATATGGAGTCGATACGTAGCACGCAGACGATGGGAGCT'
 
-TC_5prime='TCGGTACCTCGCGAATCGCCG'
-TC_3prime='TTGTCGGTGCCTTCTAGTT' #'agaattctaactagagctcgctg'
-TC_CARLIN='GAGTCGAGACGCTGACGATATGGAGTCGACACGACTCGCGCATACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGAGCGCGCTCGTCGACTATGGAGTC'
+TC_5prime='TCGGTACCTCGCGAA'
+TC_3prime='GTCTTGTCGGTGCCTTCTAGTT' 
+TC_CARLIN='TCGCCGGAGTCGAGACGCTGACGATATGGAGTCGACACGACTCGCGCATACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGAGCGCGCTCGTCGACTATGGA'
 
-RC_5prime='GTACAAGTAAAGCGGCCGCGCCG'
-RC_3prime='TGGAGTCTGCTGTGTGCCTTCTAGTT'
-RC_CARLIN='GCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGTCGAGACGCTGACGATATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGAGAGCGCGCTCGTCGACTA'
+RC_5prime='GTACAAGTAAAGCGGCC'
+RC_3prime='GTCTGCTGTGTGCCTTCTAGTT'
+RC_CARLIN='GCGCCGGCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGTCGAGACGCTGACGATATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGAGAGCGCGCTCGTCGACTATGGA'
 
     
 def consensus_sequence(df):
@@ -164,3 +164,58 @@ def CARLIN_preprocessing(df_input,template='cCARLIN',ref_cell_barcodes=None,seq_
     df_output['unique_id']=df_output['cell_id']+'_'+df_output['umi_id']+'_'+df_output['clone_id']
     df_tmp=df_output.groupby('unique_id').agg(read=('unique_id','count')).reset_index()
     return df_output.merge(df_tmp,on='unique_id').drop(['Valid','Seq','unique_id'],axis=1).drop_duplicates()
+
+
+def extract_CARLIN_info(
+    data_path,
+    SampleList,
+):
+    """
+    Extract CARLIN information
+
+    data_path:
+        The root dir to all the samples
+    SampleList:
+        The list of desired samples to load
+    """
+    
+    tmp_list=[]
+    for sample in SampleList:
+        base_dir = os.path.join(data_path, sample)
+        df_tmp = lineage.load_allele_info(base_dir)
+        # print(f"Sample (before removing frequent alleles): {sample}; allele number: {len(df_tmp)}")
+        df_tmp["sample"] = sample.split("_")[0]
+        df_tmp["mouse"] = sample.split("-")[0]
+
+        df_allele = pd.read_csv(
+            data_path + f"/{sample}/AlleleAnnotations.txt",
+            sep="\t",
+            header=None,
+            names=["allele"],
+        )
+        df_CB = pd.read_csv(
+            data_path + f"/{sample}/AlleleColonies.txt",
+            sep="\t",
+            header=None,
+            names=["CB"],
+        )
+        df_allele["CB"] = df_CB
+        df_allele["CB_N"] = df_allele["CB"].apply(lambda x: len(x.split(",")))
+
+        if os.path.exists(data_path + f"/{sample}/Actaul_CARLIN_seq.txt"):
+            df_CARLIN = pd.read_csv(
+                data_path + f"/{sample}/Actaul_CARLIN_seq.txt",
+                sep="\t",
+                header=None,
+                names=["CARLIN"],
+            )
+
+            df_allele["CARLIN"] = df_CARLIN['CARLIN'].apply(lambda x: ''.join(x.split('-')))
+
+        df_tmp = df_tmp.merge(df_allele, on="allele")
+        tmp_list.append(df_tmp)
+    df_all = (
+        pd.concat(tmp_list)
+        .rename(columns={"UMI_count": "obs_UMI_count"})
+    )
+    return df_all
