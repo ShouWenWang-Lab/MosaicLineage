@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import pandas as pd
-
+from Bio import pairwise2
 pd.options.mode.chained_assignment = None  # default='warn'
 import scipy.sparse as ssp
 import seaborn as sns
@@ -22,6 +22,7 @@ def denoise_clonal_data(
     distance_threshold=None,
     whiteList=None,
     plot_report=True,
+    group_keys=["library", "cell_id", "cell_bc", "clone_id", "umi"],
 ):
     """
     Denoise sequencing/PCR errors at a particular field.
@@ -93,7 +94,9 @@ def denoise_clonal_data(
         df_input[target_key][df_input[target_key] == "nan"] = np.nan
         df_HQ = df_input.dropna()
 
-    df_HQ_1 = group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id", "umi"])
+    # update group keys
+    group_keys=list(set(df_HQ.columns).intersection(set(group_keys))) 
+    df_HQ_1 = group_cells(df_HQ, group_keys=group_keys)
 
     ## report
     unique_seq = list(set(df_HQ_1[target_key]))
@@ -107,15 +110,18 @@ def denoise_clonal_data(
         f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
     )
     if plot_report:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-        distance = QC_sequence_distance(unique_seq)
-        min_dis = plot_seq_distance(distance, ax=axs[0])
-        read_coverage(df_HQ, target_key=target_key, ax=axs[1])
-
+        if denoise_method != 'alignment':
+            fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+            distance = QC_sequence_distance(unique_seq)
+            min_dis = plot_seq_distance(distance, ax=axs[0])
+            QC_read_coverage(df_HQ, target_key=target_key, ax=axs[1])
+        else:
+            QC_read_coverage(df_HQ, target_key=target_key)
+            
     return df_HQ_1
 
 
-def read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
+def QC_read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
     df_out = group_cells(df, group_keys=[target_key])
     ax = sns.histplot(df_out["read"], log_scale=log_scale, cumulative=False, **kwargs)
     ax.set_xlabel(f"Total read of corrected {target_key}")
@@ -124,8 +130,8 @@ def read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
 
 
 def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=True):
-    df_out = df_HQ.groupby(group_keys).sum("read")
-    if ("umi" not in group_keys) and count_UMI:
+    df_out = df_HQ.groupby(group_keys).agg({"read":"sum"})
+    if ("umi" not in group_keys) and count_UMI and ("umi" in df_HQ.columns):
         df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
     df_out = df_out.reset_index()
     return df_out
@@ -150,7 +156,7 @@ def denoise_sequence(
     Parameters:
     -----------
     method:
-        "Hamming", or "UMI_tools"
+        "Hamming",  "UMI_tools", "alignment"
     seq_list:
         can be a list with duplicate sequences, indicating the read abundance of the read
     """
@@ -181,7 +187,7 @@ def denoise_sequence(
         for umi_list in clustered_umis:
             for umi in umi_list:
                 mapping[umi] = umi_list[0]
-    else:  # "Hamming"
+    elif method == "Hamming":
         if progress_bar:
             print(
                 f"Sequences within Hamming distance {distance_threshold} are connected"
@@ -236,6 +242,56 @@ def denoise_sequence(
                         ] = False  # switch to idx to prevent modifying id list dynamically
                 else:
                     mapping[cur_seq] = cur_seq
+                    
+    elif method == "alignment":
+        # do not accept Whitelist here
+        # considers both the sequence distance, and the read difference should be 10 fold
+        mapping = {}
+        unique_seq_list = list(df["seq"])
+        read_list=list(df["read"])
+        
+        if progress_bar:
+            print(f"Processing {len(unique_seq_list)} unique sequences")
+        remaining_seq_idx = np.ones(len(unique_seq_list)).astype(bool)
+        source_seqs =  np.array(unique_seq_list).astype(str)
+
+        iter = range(len(unique_seq_list))
+        if progress_bar:
+            iter = tqdm(iter)
+        for __ in iter:
+            cur_ids = np.nonzero(remaining_seq_idx)[0]
+            id_0 = cur_ids[0]
+            cur_seq = unique_seq_list[id_0]
+            remain_seq_array = source_seqs[remaining_seq_idx]
+            remain_read_counts=np.array(read_list)[remaining_seq_idx]
+            
+            distance_vector=np.zeros(len(remain_seq_array))
+            X0= remain_seq_array[0]
+            for j, Y0 in enumerate(remain_seq_array[1:]):
+                len_diff=abs(len(X0)-len(Y0))
+                if len_diff> distance_threshold:
+                    distance_vector[j+1]=len_diff
+                else: # compute only when necessary
+                    alignments = pairwise2.align.globalxx(X0, Y0)
+                    score=np.mean([x.score for x in alignments])
+                    max_length=np.max([len(X0),len(Y0)])
+                    distance_vector[j+1]=(max_length-score)
+        
+            condition_1=remain_read_counts<=0.1*remain_read_counts[0] # check that the target reads is below a threshold of the source reads
+            condition_2=distance_vector <= distance_threshold # check that the target reads is close to the source reads
+            target_ids_tmp = np.nonzero(condition_1 & condition_2)[0]
+            target_ids=[0]+list(target_ids_tmp) # add the initial id, to ensure that the iteration is moving
+            for k in target_ids:
+                abs_id = cur_ids[k]
+                seq_tmp = unique_seq_list[abs_id]
+                mapping[seq_tmp] = cur_seq
+                remaining_seq_idx[
+                    abs_id
+                ] = False  # switch to idx to prevent modifying id list dynamically
+            
+            if np.sum(remaining_seq_idx) <= 0:
+                break
+                    
 
     if whiteList is None:
         new_seq_list = np.array([mapping[xx] for xx in seq_list]).astype(str)
