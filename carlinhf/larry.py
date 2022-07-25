@@ -24,6 +24,7 @@ def denoise_clonal_data(
     whiteList=None,
     plot_report=True,
     group_keys=["library", "cell_id", "cell_bc", "clone_id", "umi"],
+    progress_bar=True,
 ):
     """
     Denoise sequencing/PCR errors at a particular field.
@@ -46,6 +47,8 @@ def denoise_clonal_data(
         Only works for the method "Hamming"
     read_cutoff_ratio:
         only for per_cell=True. Help to modulate the read_cutoff per cell
+    progress_bar:
+        show progress bar
 
     Returns:
     --------
@@ -54,14 +57,15 @@ def denoise_clonal_data(
 
     df_input = df_raw.copy()
     sp_idx_0 = df_input["read"] >= read_cutoff
-    print(
-        f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx_0]))}"
-    )
+    if progress_bar:
+        print(
+            f"Currently cleaning {target_key}; number of unique elements: {len(set(df_input[target_key][sp_idx_0]))}"
+        )
     if (per_sample is not None) and (per_sample in df_input.columns):
         print(f"Denoising mode: per {per_sample}")
         sample_id_list = list(set(df_input[per_sample]))
         df_list = []
-        for j in tqdm(range(len(sample_id_list))):
+        for j in range(len(sample_id_list)):
             sample_id_temp = sample_id_list[j]
             df_temp = df_input[df_input[per_sample] == sample_id_temp]
 
@@ -89,6 +93,7 @@ def denoise_clonal_data(
             distance_threshold=distance_threshold,
             whiteList=whiteList,
             method=denoise_method,
+            progress_bar=progress_bar,
         )
         df_input[target_key][sp_idx] = new_seq_list
         df_input[target_key][~sp_idx] = np.nan
@@ -99,18 +104,19 @@ def denoise_clonal_data(
     group_keys = list(set(df_HQ.columns).intersection(set(group_keys)))
     df_HQ_1 = group_cells(df_HQ, group_keys=group_keys)
 
-    ## report
-    unique_seq = list(set(df_HQ_1[target_key]))
-    print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
-    read_fraction_all = df_HQ_1["read"].sum() / df_raw["read"].sum()
-    read_fraction_cutoff = (
-        df_HQ_1["read"].sum() / df_raw[df_raw["read"] >= read_cutoff]["read"].sum()
-    )
-    print(f"Retained read fraction (above cutoff 0): {read_fraction_all:.2f}")
-    print(
-        f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
-    )
     if plot_report:
+        ## report
+        unique_seq = list(set(df_HQ_1[target_key]))
+        print(f"Number of unique elements (after cleaning): {len(unique_seq)}")
+        read_fraction_all = df_HQ_1["read"].sum() / df_raw["read"].sum()
+        read_fraction_cutoff = (
+            df_HQ_1["read"].sum() / df_raw[df_raw["read"] >= read_cutoff]["read"].sum()
+        )
+        print(f"Retained read fraction (above cutoff 0): {read_fraction_all:.2f}")
+        print(
+            f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
+        )
+        
         if denoise_method != "alignment":
             fig, axs = plt.subplots(1, 2, figsize=(10, 4))
             distance = QC_sequence_distance(unique_seq)

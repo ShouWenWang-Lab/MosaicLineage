@@ -162,21 +162,20 @@ def CARLIN_preprocessing(
     # 3' end sequences, for QC. Only reads contain exactly this sequence will pass QC.
     #     The beginning of the 3' end sequences mark the end of CARLIN sequences.
 
-    if template not in ["cCARLIN", "Tigre", "Rosa"]:
-        raise ValueError("template must be one of {'cCARLIN','Tigre','Rosa'}")
-
-    if template == "cCARLIN":
+    if template.startswith("cCARLIN"):
         seq_5prime = CC_5prime
         seq_3prime = CC_3prime
         CARLIN_seq = CC_CARLIN
-    elif template == "Tigre":
+    elif template.startswith("Tigre"):
         seq_5prime = TC_5prime
         seq_3prime = TC_3prime
         CARLIN_seq = TC_CARLIN
-    elif template == "Rosa":
+    elif template.startswith("Rosa"):
         seq_5prime = RC_5prime
         seq_3prime = RC_3prime
         CARLIN_seq = RC_CARLIN
+    else:
+        raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
     if seq_5prime_upper_N is not None:
         seq_5prime = seq_5prime[-seq_5prime_upper_N:]
@@ -267,3 +266,18 @@ def extract_CARLIN_info(
         tmp_list.append(df_tmp)
     df_all = pd.concat(tmp_list).rename(columns={"UMI_count": "obs_UMI_count"})
     return df_all
+
+
+def CARLIN_output_to_cell_by_barcode_long_table(df_input):
+    CB_list = []
+    CB_flat = []
+    Clone_id_flat = []
+    for j in range(len(df_input)):
+        df_series = df_input.iloc[j]
+        tmp = [x for x in df_series["CB"].split(",")]
+        CB_flat += tmp
+        Clone_id_flat += [df_series["CARLIN"] for _ in tmp]
+
+    df_ref_flat=pd.DataFrame({'cell_bc':CB_flat,'clone_id':Clone_id_flat})
+    
+    return df_ref_flat
