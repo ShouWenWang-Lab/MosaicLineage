@@ -32,7 +32,9 @@ def generate_adata_v0(X_clone, state_info=None):
     return adata_orig
 
 
-def generate_adata_sample_by_allele(df_data, use_UMI=True):
+def generate_adata_sample_by_allele(
+    df_data, count_value_key="obs_UMI_count", use_UMI=True
+):
     all_mutation = np.array(list(set(df_data["allele"])))
     all_cells = np.array(list(set(df_data["sample"])))
     X_clone = np.zeros((len(all_cells), len(all_mutation)))
@@ -41,7 +43,7 @@ def generate_adata_sample_by_allele(df_data, use_UMI=True):
         idx_1 = np.nonzero(all_cells == yy)[0]
         idx_2 = np.nonzero(all_mutation == xx)[0]
         X_clone[idx_1, idx_2] = df_data.iloc[i][
-            "obs_UMI_count"
+            count_value_key
         ]  # This keeps the count information, and works better
         # X_clone[i,idx]=1
 
@@ -54,7 +56,7 @@ def generate_adata_sample_by_allele(df_data, use_UMI=True):
     adata_orig.uns["data_des"] = ["hi"]
     if "expected_frequency" in df_data.keys():
         adata_orig.uns["expected_frequency"] = np.array(df_data["expected_frequency"])
-    adata_orig.uns["obs_UMI_count"] = np.array(df_data["obs_UMI_count"])
+    adata_orig.uns[count_value_key] = np.array(df_data[count_value_key])
 
     if "mouse" in df_data.keys():
         adata_orig.uns["mouse"] = np.array(df_data["mouse"])

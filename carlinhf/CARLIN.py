@@ -89,10 +89,6 @@ def CARLIN_analysis(
         consensuse_CARLIN=(clone_key, consensus_sequence), read=("read", "sum")
     )
     df_final["CARLIN_length"] = df_final["consensuse_CARLIN"].apply(lambda x: len(x))
-    df_final = df_final.merge(
-        df_dominant_fraction.reset_index().filter([cell_bc_key, "max_read_ratio"]),
-        on=cell_bc_key,
-    )
     return df_final
 
 
@@ -261,6 +257,7 @@ def extract_CARLIN_info(
             df_allele["CARLIN"] = df_CARLIN["CARLIN"].apply(
                 lambda x: "".join(x.split("-"))
             )
+            df_allele["CARLIN_length"] = df_allele["CARLIN"].apply(lambda x: len(x))
 
         df_tmp = df_tmp.merge(df_allele, on="allele")
         tmp_list.append(df_tmp)
@@ -269,6 +266,10 @@ def extract_CARLIN_info(
 
 
 def CARLIN_output_to_cell_by_barcode_long_table(df_input):
+    """
+    Convert output from extract_CARLIN_info (a wide table)
+    to a two column (cell, and clone_id) long table.
+    """
     CB_list = []
     CB_flat = []
     Clone_id_flat = []
@@ -278,6 +279,13 @@ def CARLIN_output_to_cell_by_barcode_long_table(df_input):
         CB_flat += tmp
         Clone_id_flat += [df_series["CARLIN"] for _ in tmp]
 
-    df_ref_flat=pd.DataFrame({'cell_bc':CB_flat,'clone_id':Clone_id_flat})
-    
+    df_ref_flat = pd.DataFrame({"cell_bc": CB_flat, "clone_id": Clone_id_flat})
+
     return df_ref_flat
+
+
+def get_SampleList(root_path):
+    with open(f"{root_path}/config.yaml", "r") as stream:
+        file = yaml.safe_load(stream)
+        SampleList = file["SampleList"]
+    return SampleList
