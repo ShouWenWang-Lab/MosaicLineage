@@ -1,5 +1,7 @@
 import os
+from random import sample
 from re import A
+from shutil import SameFileError
 
 import cospar as cs
 import numpy as np
@@ -1034,6 +1036,20 @@ def analyze_cell_coupling(
     df_all = car.extract_CARLIN_info(data_path, Flat_SampleList)
     df_all = df_all.merge(df_ref, on="allele", how="left")
 
+    if os.path.exists(f"{data_path}/../../sample_info.csv"):
+        print("Correct UMI count information by cell number information")
+        df_sample_info = pd.read_csv(f"{data_path}/../../sample_info.csv")
+        df_all = df_all.merge(df_sample_info, left_on="sample", right_on="sample_id")
+        df_all["orig_obs_UMI_count"] = df_all["obs_UMI_count"]
+        df_all["obs_UMI_count"] = df_all["obs_UMI_count"] / df_all["cell_number"]
+        df_all["obs_UMI_count"] = df_all["obs_UMI_count"] / np.max(
+            df_all["obs_UMI_count"]
+        )
+    else:
+        print(
+            "cell number sample_info.csv does not exist. Do not perform cell number correction for the obs_UMI_count"
+        )
+
     df_HQ = df_all.query("invalid_alleles!=True")
 
     print("Clone number (before correction): {}".format(len(set(df_all["allele"]))))
@@ -1041,7 +1057,9 @@ def analyze_cell_coupling(
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
-    adata_orig = lineage.generate_adata_sample_by_allele(df_HQ)
+    adata_orig = lineage.generate_adata_sample_by_allele(
+        df_HQ, count_value_key="obs_UMI_count", use_UMI=True
+    )
 
     # sample number histogram
     sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
@@ -1145,6 +1163,7 @@ def annotate_clone_fate(adata, thresh=0.2):
     clone_id = adata.var_names
     # df = cs.tl.get_normalized_coarse_X_clone(adata, adata.obs_names)
     norm_X = adata.X.A / adata.X.A.sum(0)  # normalize each clone across all fates
+    df_normX_fate = pd.DataFrame(norm_X.T, index=clone_id, columns=adata.obs_names)
     fate_list = [",".join(adata.obs_names[x]) for x in norm_X.T > thresh]
     fate_N = [len(adata.obs_names[x]) for x in norm_X.T > thresh]
     mouse_N = [len(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
@@ -1165,28 +1184,26 @@ def annotate_clone_fate(adata, thresh=0.2):
     sns.histplot(df_anno["fate_N"], ax=axs[1])
     sns.histplot(df_anno["fate_mouse_N"], ax=axs[2])
     plt.tight_layout()
-    return df_anno  # [df_anno["mouse_N"] < 2]
+    return df_anno, df_normX_fate  # [df_anno["mouse_N"] < 2]
 
 
 def load_single_cell_CARLIN(root_path, plate_map, read_cutoff=2, locus=None):
-    with open(f"{root_path}/config.yaml", "r") as stream:
-        file = yaml.safe_load(stream)
-        SampleList = file["SampleList"]
+    SampleList = car.get_SampleList(root_path)
+    data_path = os.path.join(
+        root_path, "CARLIN", f"results_cutoff_override_{read_cutoff}"
+    )
+    df_out = car.extract_CARLIN_info(data_path, SampleList)
+
+    df_out["locus"] = df_out["sample"].apply(lambda x: x[-2:])
 
     df_ref = pd.read_csv(
         f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
     ).filter(["allele", "expected_frequency", "sample_count"])
-    data_path = os.path.join(
-        root_path, "CARLIN", f"results_cutoff_override_{read_cutoff}"
-    )
-    df_out = hf.extract_CARLIN_info(data_path, SampleList, df_ref)
+    df_out = df_out.merge(df_ref, on="allele", how="left")
     df_out["plate_ID"] = (
         df_out["sample"].apply(lambda x: x[:-3]).map(plate_map)
     )  # .astype('category')
-    df_out["locus"] = df_out["sample"].apply(lambda x: x[-2:])
 
-    # df_ref['invalid_alleles']=(df_ref['sample_count']>6) | (df_ref['expected_frequency']>frequency_cutoff)
-    # df_out=df_out.merge(df_clone_fate_CC,on='allele').query('invalid_alleles!=True')
     return df_out
 
 
@@ -1197,8 +1214,9 @@ def get_clone_anno(locus, sample_map, Bulk_CARLIN_dir, target_sample):
     df_all_fate["sample"] = df_all_fate["sample"].map(sample_map).astype("category")
     adata = lineage.generate_adata_sample_by_allele(df_all_fate)
     adata.obs_names = adata.obs["state_info"]
-    df_clone_fate = annotate_clone_fate(adata, thresh=0.1)
-    return adata, df_clone_fate
+    (df_clone_fate, df_normX_fate) = annotate_clone_fate(adata, thresh=0.1)
+    df_normX_fate.index = f"{locus}_" + df_normX_fate.index
+    return adata, df_clone_fate, df_normX_fate
 
 
 def integrate_early_clone_and_fate(
@@ -1243,3 +1261,82 @@ def integrate_early_clone_and_fate(
         df_final_tmp.filter(["clone_id", "fate"]), on="clone_id", how="left"
     )
     return df_final_tmp, df_cell_to_BC
+
+
+def annotate_SW_CARLIN_data(
+    SC_CARLIN_dir,
+    Bulk_CARLIN_dir,
+    target_sample,
+    plate_map,
+    locus="CC",
+    BC_max_sample_count=6,
+    BC_max_freq=10 ** (-4),
+    read_cutoff=10,
+):
+    print(
+        f"locus: {locus}; read cutoff: {read_cutoff}; BC_max_sample_count: {BC_max_sample_count}; BC_max_freq: {BC_max_freq}"
+    )
+
+    # load all CARLIN data across samples
+    SampleList = car.get_SampleList(SC_CARLIN_dir + f"/{locus}")
+    df_list = []
+    for sample in SampleList:
+        df_sc_tmp = pd.read_csv(
+            f"{SC_CARLIN_dir}/{locus}/CARLIN/Shouwen_Method/{sample}/called_barcodes_by_SW_method.csv"
+        )
+        df_list.append(df_sc_tmp)
+    df_sc_data = pd.concat(df_list, ignore_index=True)
+
+    # convert CARLIN sequence to allele annotation using the bulk data
+    df_tmp_CC = (
+        pd.read_csv(f"{Bulk_CARLIN_dir}/{locus}_CARLIN_{target_sample}_all.csv")
+        .filter(["allele", "CARLIN"])
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    CARLIN_to_allel_map_CC = dict(zip(df_tmp_CC["CARLIN"], df_tmp_CC["allele"]))
+    df_sc_data["allele"] = (
+        df_sc_data["clone_id"].map(CARLIN_to_allel_map_CC).fillna("unmapped")
+    )
+
+    # annotate sample information
+    if "library" in df_sc_data.columns:
+        df_sc_data["sample"] = df_sc_data["library"].apply(lambda x: x.split("_")[0])
+
+    df_sc_data["locus"] = df_sc_data["sample"].apply(lambda x: x[-2:])
+    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
+    df_sc_data["plate_ID"] = (
+        df_sc_data["sample"].apply(lambda x: x[:-3]).map(plate_map)
+    )  # .astype('category')
+
+    # add expected allele frequency
+    df_ref = pd.read_csv(
+        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
+    ).filter(["allele", "expected_frequency", "sample_count"])
+    df_sc_data = df_sc_data.merge(df_ref, on="allele", how="left").fillna(0)
+
+    # add clonal fate outcome
+    df_clone_fate = pd.read_csv(
+        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/multi-omic-analysis/202205_in_vivo_bone_marrow/data/bulk_CARLIN_clonal_fate_{locus}.csv"
+    )
+    df_sc_data = df_sc_data.merge(df_clone_fate, on="allele", how="left")
+
+    # filter out promiscuous clones
+    df_sc_data = (
+        df_sc_data
+        # df_sc_data[df_sc_data["mouse"] == df_sc_data["fate_mouse"]]
+        # .fillna(0)
+        .assign(
+            HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
+            & (x["expected_frequency"] <= BC_max_freq)
+        ).query("HQ==True")
+    )
+    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
+
+    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
+    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
+    df_sc_data["fate"] = df_sc_data["fate"].fillna("no_fates")
+    df_sc_data = df_sc_data[df_sc_data.read >= read_cutoff]
+    return df_sc_data, df_sc_data.filter(
+        ["RNA_id", "clone_id", "fate", "CARLIN_length", "read", "fate_N"]
+    )
