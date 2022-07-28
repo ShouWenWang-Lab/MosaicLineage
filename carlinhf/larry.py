@@ -13,6 +13,16 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from umi_tools import UMIClusterer
 
+#########################################################
+
+## We put functions for extracting and
+# denoising meaningful cell barcodes here. It contains many QC functions.
+# It is useful for dealing with data from either LARRY or CARLIN protocol
+# It is especially useful in the context where we are concerned about the
+# sequencing error in generating cell or clone barcodes.
+
+#########################################################
+
 
 def denoise_clonal_data(
     df_raw,
@@ -116,7 +126,7 @@ def denoise_clonal_data(
         print(
             f"Retained read fraction (above cutoff {read_cutoff}): {read_fraction_cutoff:.2f}"
         )
-        
+
         if denoise_method != "alignment":
             fig, axs = plt.subplots(1, 2, figsize=(10, 4))
             distance = QC_sequence_distance(unique_seq)

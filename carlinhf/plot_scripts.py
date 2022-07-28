@@ -14,34 +14,18 @@ from matplotlib import rcParams
 from nbformat import read
 
 import carlinhf.CARLIN as car
-import carlinhf.help_functions as hf
-import carlinhf.LINE1 as line1
 import carlinhf.lineage as lineage
+import carlinhf.plotting as plotting
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
 
+##################################################
 
-def add_shade(ax, color=["#2b83ba", "#d7191c"]):
-    l1 = ax.lines[0]
-    l2 = ax.lines[1]
-    # Get the xy data from the lines so that we can shade
-    x1 = l1.get_xydata()[:, 0]
-    y1 = l1.get_xydata()[:, 1]
-    x2 = l2.get_xydata()[:, 0]
-    y2 = l2.get_xydata()[:, 1]
-    ax.fill_between(x1, y1, color=color[0], alpha=0.5)
-    ax.fill_between(x2, y2, color=color[1], alpha=0.1)
-    return ax
+# This file contains lousy functions that are often from one-off analysis.
+# It primarily focuses with plotting and ends with the plotting
 
-
-def add_shade_1(ax, color="#2b83ba"):
-    l1 = ax.lines[0]
-    # Get the xy data from the lines so that we can shade
-    x1 = l1.get_xydata()[:, 0]
-    y1 = l1.get_xydata()[:, 1]
-    ax.fill_between(x1, y1, color=color, alpha=0.5)
-    return ax
+###################################################
 
 
 def remove_samples(df, removed_sample):
@@ -129,7 +113,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_xlabel("Mutation event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
 
     ### Insertion event number per allele
@@ -156,7 +140,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_xlabel("Insertion event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
 
     ### Deletion event number per allele
@@ -180,7 +164,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_xlabel("Deletion event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
     ## Total insertion length per allele
@@ -218,7 +202,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf")
 
     ## Single insertion length per allele
@@ -250,7 +234,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(
         f"figure/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
     )
@@ -284,7 +268,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf")
 
     ## Single deletion length per allele
@@ -315,7 +299,7 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     ax.set_xlabel("Single deletion length per allele")
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.tight_layout()
     plt.savefig(
         f"figure/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
@@ -359,7 +343,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_xlabel("Mutation event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(f"figure/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
 
     ### Insertion event number per allele
@@ -374,7 +358,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_xlabel("Insertion event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(f"figure/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
 
     ### Deletion event number per allele
@@ -387,7 +371,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_xlabel("Deletion event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(f"figure/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
     fig, ax = plt.subplots()
@@ -409,7 +393,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_xlabel("Event # per allele")
     ax.set_ylabel("Distribution")
     plt.tight_layout()
-    add_shade(ax, color=["#225ea8", "#d7301f"])
+    plotting.add_shade(ax, color=["#225ea8", "#d7301f"])
     plt.savefig(f"figure/{sample_key}/ins_deletion_per_allele.pdf")
 
     ## Total insertion length per allele
@@ -428,7 +412,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(f"figure/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf")
 
     ## Single insertion length per allele
@@ -449,7 +433,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(
         f"figure/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
     )
@@ -470,7 +454,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.savefig(f"figure/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf")
 
     ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
@@ -496,8 +480,8 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     # ax2.set_ylabel("")
     ax.figure.legend(loc="upper center")
     # plt.xscale('log')
-    add_shade_1(ax, color="#225ea8")
-    add_shade_1(ax2, color="#d7301f")
+    plotting.add_shade_1(ax, color="#225ea8")
+    plotting.add_shade_1(ax2, color="#d7301f")
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.tight_layout()
     plt.savefig(f"figure/{sample_key}/tot_ins_del_length_per_allele.pdf")
@@ -520,7 +504,7 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
     ax.set_xlabel("Single deletion length per allele")
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
-    add_shade_1(ax)
+    plotting.add_shade_1(ax)
     plt.tight_layout()
     plt.savefig(
         f"figure/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
@@ -590,7 +574,7 @@ def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.savefig(f"figure/{sample_key}/tot_ins_length_per_UMI_compare_cas9_Dntt.pdf")
 
 
@@ -784,7 +768,7 @@ def insertion_del_freq_histogram(df, sample_key):
 
     os.makedirs("figure/" + sample_key, exist_ok=True)
     df_mutation = lineage.mutation_frequency(df, plot=False)
-    x_var, y_var = line1.plot_loghist(
+    x_var, y_var = plotting.plot_loghist(
         list(df_mutation["UMI_count"]), cutoff_y=1, bins=20
     )
     x_label = "Occurence # per allele (UMI count)"
@@ -844,7 +828,7 @@ def insertion_del_freq_histogram(df, sample_key):
     ax.set_ylabel("Histogram")
     # plt.xscale('log')
     plt.tight_layout()
-    add_shade(ax)
+    plotting.add_shade(ax)
     plt.tight_layout()
     plt.savefig(f"figure/{sample_key}/ins_del_freq_histogram_normal_scale.pdf")
 
@@ -1040,11 +1024,9 @@ def analyze_cell_coupling(
         print("Correct UMI count information by cell number information")
         df_sample_info = pd.read_csv(f"{data_path}/../../sample_info.csv")
         df_all = df_all.merge(df_sample_info, left_on="sample", right_on="sample_id")
-        df_all["orig_obs_UMI_count"] = df_all["obs_UMI_count"]
-        df_all["obs_UMI_count"] = df_all["obs_UMI_count"] / df_all["cell_number"]
-        df_all["obs_UMI_count"] = df_all["obs_UMI_count"] / np.max(
-            df_all["obs_UMI_count"]
-        )
+        df_all["orig_obs_UMI_count"] = df_all["UMI_count"]
+        df_all["UMI_count"] = df_all["UMI_count"] / df_all["cell_number"]
+        df_all["UMI_count"] = df_all["UMI_count"] / np.max(df_all["UMI_count"])
     else:
         print(
             "cell number sample_info.csv does not exist. Do not perform cell number correction for the obs_UMI_count"
@@ -1058,7 +1040,7 @@ def analyze_cell_coupling(
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
     adata_orig = lineage.generate_adata_sample_by_allele(
-        df_HQ, count_value_key="obs_UMI_count", use_UMI=True
+        df_HQ, count_value_key="UMI_count", use_UMI=True
     )
 
     # sample number histogram
@@ -1085,7 +1067,7 @@ def analyze_cell_coupling(
         print("coarse_X_clone shape:", coarse_X_clone.shape)
         coarse_X_clone = coarse_X_clone[:, (coarse_X_clone > 0).sum(0) > 1]
 
-    adata = lineage.generate_adata_v0(
+    adata = lineage.generate_adata_from_X_clone(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names
     )
 
@@ -1094,19 +1076,6 @@ def analyze_cell_coupling(
 
     cs.pl.barcode_heatmap(adata, binarize=True, selected_fates=short_names)
     fate_names = short_names
-
-    # final_matrix = lineage.custom_hierachical_ordering(
-    #     np.arange(coarse_X_clone.shape[0]), coarse_X_clone
-    # )
-    # cs.pl.heatmap(
-    #     (final_matrix > 0).T + pseudo_count,
-    #     order_map_x=False,
-    #     order_map_y=False,
-    #     x_ticks=fate_names,
-    #     color_bar_label="Barcode count",
-    #     fig_height=10,
-    #     fig_width=8,
-    # )
 
     # cell count
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -1263,80 +1232,83 @@ def integrate_early_clone_and_fate(
     return df_final_tmp, df_cell_to_BC
 
 
-def annotate_SW_CARLIN_data(
-    SC_CARLIN_dir,
-    Bulk_CARLIN_dir,
-    target_sample,
-    plate_map,
-    locus="CC",
-    BC_max_sample_count=6,
-    BC_max_freq=10 ** (-4),
-    read_cutoff=10,
+def clonal_analysis(
+    adata_sub, data_des="all", scenario="coarse", data_path=".", color_coding=None
 ):
-    print(
-        f"locus: {locus}; read cutoff: {read_cutoff}; BC_max_sample_count: {BC_max_sample_count}; BC_max_freq: {BC_max_freq}"
-    )
+    """
+    Perform basic clonal analysis, including clonal heatmap, and tree generation and visualization
 
-    # load all CARLIN data across samples
-    SampleList = car.get_SampleList(SC_CARLIN_dir + f"/{locus}")
-    df_list = []
-    for sample in SampleList:
-        df_sc_tmp = pd.read_csv(
-            f"{SC_CARLIN_dir}/{locus}/CARLIN/Shouwen_Method/{sample}/called_barcodes_by_SW_method.csv"
+    This is tailored for the allele-by-mutation adata object
+    """
+
+    if scenario == "coarse":
+        print("coarse-grained analysis")
+        ## generate plots for the coarse-grained data
+        # adata_sub.obs["state_info"] = adata_sub.obs["sample"]
+        adata_sub.uns["data_des"] = [f"{data_des}_coarse"]
+        cs.settings.data_path = data_path
+        cs.settings.figure_path = data_path
+        os.makedirs(data_path, exist_ok=True)
+        cs.pl.barcode_heatmap(
+            adata_sub,
+            color_bar=True,
+            fig_height=10,
+            fig_width=10,
+            y_ticks=None,  # adata_sub.var_names,
+            x_label="Allele",
+            y_label="Mutation",
         )
-        df_list.append(df_sc_tmp)
-    df_sc_data = pd.concat(df_list, ignore_index=True)
+        cs.tl.fate_coupling(adata_sub, source="X_clone")
+        cs.pl.fate_coupling(adata_sub, source="X_clone")
+        cs.tl.fate_hierarchy(adata_sub, source="X_clone")
+        my_tree_coarse = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
+        with open(f"{cs.settings.data_path}/{data_des}_coarse_tree.txt", "w") as f:
+            f.write(my_tree_coarse.write())
 
-    # convert CARLIN sequence to allele annotation using the bulk data
-    df_tmp_CC = (
-        pd.read_csv(f"{Bulk_CARLIN_dir}/{locus}_CARLIN_{target_sample}_all.csv")
-        .filter(["allele", "CARLIN"])
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
-    CARLIN_to_allel_map_CC = dict(zip(df_tmp_CC["CARLIN"], df_tmp_CC["allele"]))
-    df_sc_data["allele"] = (
-        df_sc_data["clone_id"].map(CARLIN_to_allel_map_CC).fillna("unmapped")
-    )
+        plotting.visualize_tree(
+            my_tree_coarse,
+            color_coding=color_coding,
+            mode="r",
+            data_des=f"{data_des}_coarse",
+            figure_path=cs.settings.data_path,
+        )
 
-    # annotate sample information
-    if "library" in df_sc_data.columns:
-        df_sc_data["sample"] = df_sc_data["library"].apply(lambda x: x.split("_")[0])
+    else:
+        print("refined analysis, using all cells")
+        ## refined heatmap and coupling, no ticks
+        # adata_sub.obs["state_info"] = adata_sub.obs["cell_id"]
+        adata_sub.uns["data_des"] = [f"{data_des}_refined"]
+        cs.pl.barcode_heatmap(
+            adata_sub,
+            color_bar=True,
+            fig_height=10,
+            fig_width=12,
+            y_ticks=None,  # adata_sub.var_names,
+            x_label="Allele",
+            y_label="Mutation",
+            x_ticks=None,
+        )
+        cs.tl.fate_coupling(adata_sub, source="X_clone")
+        cs.pl.fate_coupling(
+            adata_sub,
+            source="X_clone",
+            x_ticks=None,
+            y_ticks=None,
+            x_label="Allele",
+            y_label="Allele",
+        )
+        cs.tl.fate_hierarchy(adata_sub, source="X_clone")
+        my_tree_refined = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
+        with open(f"{cs.settings.data_path}/{data_des}_refined_tree.txt", "w") as f:
+            f.write(my_tree_refined.write())
 
-    df_sc_data["locus"] = df_sc_data["sample"].apply(lambda x: x[-2:])
-    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
-    df_sc_data["plate_ID"] = (
-        df_sc_data["sample"].apply(lambda x: x[:-3]).map(plate_map)
-    )  # .astype('category')
+        plotting.visualize_tree(
+            my_tree_refined,
+            color_coding=color_coding,
+            mode="c",
+            data_des=f"{data_des}_refined",
+            figure_path=cs.settings.figure_path,
+            dpi=300,
+        )
 
-    # add expected allele frequency
-    df_ref = pd.read_csv(
-        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
-    ).filter(["allele", "expected_frequency", "sample_count"])
-    df_sc_data = df_sc_data.merge(df_ref, on="allele", how="left").fillna(0)
 
-    # add clonal fate outcome
-    df_clone_fate = pd.read_csv(
-        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/multi-omic-analysis/202205_in_vivo_bone_marrow/data/bulk_CARLIN_clonal_fate_{locus}.csv"
-    )
-    df_sc_data = df_sc_data.merge(df_clone_fate, on="allele", how="left")
-
-    # filter out promiscuous clones
-    df_sc_data = (
-        df_sc_data
-        # df_sc_data[df_sc_data["mouse"] == df_sc_data["fate_mouse"]]
-        # .fillna(0)
-        .assign(
-            HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-            & (x["expected_frequency"] <= BC_max_freq)
-        ).query("HQ==True")
-    )
-    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
-
-    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
-    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
-    df_sc_data["fate"] = df_sc_data["fate"].fillna("no_fates")
-    df_sc_data = df_sc_data[df_sc_data.read >= read_cutoff]
-    return df_sc_data, df_sc_data.filter(
-        ["RNA_id", "clone_id", "fate", "CARLIN_length", "read", "fate_N"]
-    )

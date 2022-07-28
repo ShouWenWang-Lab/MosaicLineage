@@ -41,10 +41,10 @@ def test_all(shared_datadir):
         df_tmp["sample"] = sample.split("_")[0]
         df_tmp["mouse"] = sample.split("-")[0]
         tmp_list.append(df_tmp)
-    df_all_0 = pd.concat(tmp_list).rename(columns={"UMI_count": "obs_UMI_count"})
+    df_all_0 = pd.concat(tmp_list)
     # df_all = lineage.query_allele_frequencies(df_all_0, df_all_0)
-    df_all_0["expected_frequency"] = df_all_0["obs_UMI_count"]
-    adata_orig = lineage.generate_adata(df_all_0)
+    df_all_0["expected_frequency"] = df_all_0["UMI_count"]
+    adata_orig = lineage.generate_adata_allele_by_mutation(df_all_0)
 
     adata_sub = adata_orig[:, adata_orig.uns["multicell_clones"]][
         adata_orig.obs["cells_from_multicell_clone"]
