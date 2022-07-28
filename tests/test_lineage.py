@@ -13,7 +13,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
 
-from tests.context import lineage
+from tests.context import hf
 
 
 def config(shared_datadir):
@@ -37,18 +37,16 @@ def test_all(shared_datadir):
     for sample in SampleList:
         print(f"Sample: {sample}")
         base_dir = os.path.join(shared_datadir, f"{sample}")
-        df_tmp = lineage.load_allele_info(base_dir)
+        df_tmp = hf.load_allele_info(base_dir)
         df_tmp["sample"] = sample.split("_")[0]
         df_tmp["mouse"] = sample.split("-")[0]
         tmp_list.append(df_tmp)
     df_all_0 = pd.concat(tmp_list)
-    # df_all = lineage.query_allele_frequencies(df_all_0, df_all_0)
+    # df_all = hf.query_allele_frequencies(df_all_0, df_all_0)
     df_all_0["expected_frequency"] = df_all_0["UMI_count"]
-    adata_orig = lineage.generate_adata_allele_by_mutation(df_all_0)
+    adata_orig = hf.generate_adata_allele_by_mutation(df_all_0)
 
-    adata_sub = adata_orig[:, adata_orig.uns["multicell_clones"]][
-        adata_orig.obs["cells_from_multicell_clone"]
-    ]
+    adata_sub = adata_orig
     adata_sub.obsm["X_clone"] = adata_sub.X
 
     cell_N_temp = []
@@ -96,7 +94,7 @@ def test_all(shared_datadir):
     cs.tl.fate_hierarchy(adata_sub, source="X_clone")
     cs.pl.fate_hierarchy(adata_sub, source="X_clone")
     my_tree_coarse = adata_sub.uns["fate_hierarchy_X_clone"]["tree"]
-    lineage.visualize_tree(
+    hf.visualize_tree(
         my_tree_coarse,
         color_coding=None,
         mode="r",
@@ -115,10 +113,10 @@ def test_all(shared_datadir):
         "LL607-LK": 1,
     }
 
-    origin_score = lineage.onehot(input_dict)
+    origin_score = hf.onehot(input_dict)
     parent_map = adata_sub.uns["fate_hierarchy_X_clone"]["parent_map"]
     node_mapping = adata_sub.uns["fate_hierarchy_X_clone"]["node_mapping"]
-    corr, __ = lineage.tree_reconstruction_accuracy(
+    corr, __ = hf.tree_reconstruction_accuracy(
         parent_map, node_mapping, origin_score=origin_score, weight_factor=1
     )
     print(f"Tree reconstruction accuracy: {corr}")
@@ -131,7 +129,7 @@ def test_all(shared_datadir):
     cs.settings.set_figure_params(
         format="png", figsize=[4, 3.5], dpi=75, fontsize=15, pointsize=4
     )
-    scores = lineage.evaluate_coupling_matrix(
+    scores = hf.evaluate_coupling_matrix(
         X_coupling, fate_names, origin_score=origin_score, decay_factor=1, plot=True
     )
     print(f"Coupling matrix scores: {scores}")

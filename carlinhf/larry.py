@@ -177,6 +177,12 @@ def denoise_sequence(
     seq_list:
         can be a list with duplicate sequences, indicating the read abundance of the read
     """
+
+    if method not in ["Hamming", "UMI_tools", "alignment"]:
+        raise ValueError(
+            'method should be among  {"Hamming",  "UMI_tools", "alignment"}'
+        )
+
     seq_list = np.array(input_seqs).astype(bytes)
     if read_count is None:
         read_count = np.ones(len(seq_list))

@@ -11,7 +11,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
 
-from tests.context import larry
+from tests.context import hf
 
 
 def config(shared_datadir):
@@ -43,19 +43,19 @@ def test_all(shared_datadir):
     #     "AACCCCTATTTATGTATTTCGGCCTGTA",
     #     "AACTAATTCAACCCAACGCAGAGCGCAA",
     # ]
-    # mapping, new_seq_list = larry.denoise_sequence(
+    # mapping, new_seq_list = hf.denoise_sequence(
     #     seq_list, method="distance", distance_threshold=6, whiteList=whiteList
     # )
     # new_seq_list = set(new_seq_list)
     # new_seq_list.remove("nan")
-    # distance = larry.QC_sequence_distance(list(set(new_seq_list)))
-    # larry.plot_seq_distance(distance)
+    # distance = hf.QC_sequence_distance(list(set(new_seq_list)))
+    # hf.plot_seq_distance(distance)
 
     # whiteList=pd.read_csv('data/actual_bc.csv',index_col=0)['whitelist']
     import cospar as cs
 
     adata = cs.hf.read(
-        "/Users/shouwenwang/Dropbox (HMS)/shared_folder_with_Li/Analysis/notebooks/data/scLimeCat_adata_preprocessed.h5ad"
+        "/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/multi-omic-analysis/20211027_MPP_multiomics/data/scLimeCat_adata_preprocessed.h5ad"
     )
     whiteList = list(adata[adata.obs["time_info"] == "2"].obs_names)
 
@@ -68,11 +68,11 @@ def test_all(shared_datadir):
         "LARRY_10X_32": "MPP_10X_A4_1",
     }
 
-    df_all = larry.rename_library_info(df_all, mapping_dictionary)
+    df_all = hf.rename_library_info(df_all, mapping_dictionary)
     df_temp = df_all[df_all["read"] >= 3]
-    mapping, new_seq_list = larry.denoise_sequence(
+    mapping, new_seq_list = hf.denoise_sequence(
         df_temp["cell_id"],
-        method="distance",
+        method="Hamming",
         distance_threshold=2,
         whiteList=list(whiteList),
     )
