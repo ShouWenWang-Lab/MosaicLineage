@@ -1,7 +1,4 @@
 import os
-import time
-from copy import deepcopy
-from pathlib import Path
 
 import cospar as cs
 import numpy as np
@@ -10,19 +7,18 @@ import scanpy as sc
 import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
-from scipy.io import loadmat
 from tqdm import tqdm
 
 import carlinhf.plotting as plotting
 
 rng = np.random.default_rng()
 
-###################################################
+###########################################################
 
-## downstream allele analysis, 
+## downstream allele analysis, tailored for CARLIN dataset
 # like frequency, mutation-allele relation etc.
 
-###################################################
+###########################################################
 
 
 def mutations_per_allele(
@@ -546,6 +542,8 @@ def conditional_heatmap(
     fate_names: list,
     included_fates: list = None,
     excluded_fates: list = None,
+    binarize=True,
+    mode="and",
     plot=True,
     **kwargs,
 ):
@@ -555,19 +553,38 @@ def conditional_heatmap(
     log_transform: True or False
     """
     fate_names = np.array(fate_names)
-    valid_clone_idx = np.ones(coarse_X_clone.shape[1]).astype(bool)
-    if included_fates is not None:
-        for x_name in included_fates:
-            valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
-            valid_clone_idx = valid_clone_idx & valid_clone_idx_tmp
 
-    if excluded_fates is not None:
-        for x_name in excluded_fates:
-            valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
-            valid_clone_idx = valid_clone_idx & ~valid_clone_idx_tmp
+    if mode == "and":
+        valid_clone_idx = np.ones(coarse_X_clone.shape[1]).astype(bool)
+        if included_fates is not None:
+            for x_name in included_fates:
+                valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+                valid_clone_idx = valid_clone_idx & valid_clone_idx_tmp
+
+        if excluded_fates is not None:
+            for x_name in excluded_fates:
+                valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+                valid_clone_idx = valid_clone_idx & ~valid_clone_idx_tmp
+    elif mode == "or":
+        valid_clone_idx = np.zeros(coarse_X_clone.shape[1]).astype(bool)
+        if included_fates is not None:
+            for x_name in included_fates:
+                valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+                valid_clone_idx = valid_clone_idx | valid_clone_idx_tmp
+
+        if excluded_fates is not None:
+            for x_name in excluded_fates:
+                valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
+                valid_clone_idx = valid_clone_idx | ~valid_clone_idx_tmp
 
     new_matrix = coarse_X_clone[:, valid_clone_idx]
     X_count, norm_X_count = get_fate_count_coupling(new_matrix)
+    new_matrix = cs.pl.custom_hierachical_ordering(
+        np.arange(new_matrix.shape[0]), new_matrix
+    )
+
+    if binarize:
+        new_matrix = (new_matrix > 0).astype(int)
 
     for j, x in enumerate(fate_names):
         print(f"Clone # ({x}): {(new_matrix>0).sum(1)[j]:.2f}")
@@ -575,6 +592,7 @@ def conditional_heatmap(
         cs.pl.heatmap(
             new_matrix.T,
             order_map_x=False,
+            order_map_y=False,
             x_ticks=fate_names,
             **kwargs,
         )
@@ -591,7 +609,8 @@ def conditional_heatmap(
 
 def generate_adata_from_X_clone(X_clone, state_info=None):
     """
-    Convert X_clone matrix to adata.
+    Convert X_clone matrix to adata, and also add it to adata.obsm['X_clone'].
+    You can run cospar on it directly.
     """
     adata_orig = sc.AnnData(X_clone)
     adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
@@ -719,10 +738,62 @@ def generate_adata_allele_by_mutation(
 def keep_informative_cell_and_clones(
     adata, clone_size_thresh=2, barcode_num_per_cell=1
 ):
-    # select clones observed in more than one cells.
-    # and keep cells that have at least one clone
+    """
+    Given an annadata object, select clones observed in more than one cells.
+    and keep cells that have at least one clone
+    """
     clone_idx = (adata.X > 0).sum(0).A.flatten() >= clone_size_thresh
     cell_idx = (adata.X[:, clone_idx] > 0).sum(1).A.flatten() >= barcode_num_per_cell
     adata_new = adata[:, clone_idx][cell_idx]
     adata_new.obsm["X_clone"] = adata_new.X
     return adata_new
+
+
+def generate_clonal_fate_table(df_allele, thresh=0.2):
+    """
+    Convert df_allele table to a clone-fate matrix, also with an annotated fate outcome for each
+    allele
+
+    We perform normalization for each clone across all fates. Note that the clonal data might have
+    cell-type-size normalized using the cell number information from the bulk data.
+
+    We use the relative threshld `thresh` to determine the fate outcome of a given clone,
+    but we also return the raw fate matrix.
+
+    Return clonal fate table, and clonal fate matrix.
+    """
+
+    adata = generate_adata_sample_by_allele(df_allele)
+    adata.obs_names = adata.obs["state_info"]
+    adata.obs["mouse"] = [str(x).split("-")[0] for x in adata.obs_names]
+    clone_id = adata.var_names
+    clone_matrix = adata.X.A
+    norm_X_tmp = (
+        clone_matrix / clone_matrix.sum(axis=1)[:, np.newaxis]
+    )  # normalize by row, i.e., within the same cell type
+    norm_X = norm_X_tmp / (
+        norm_X_tmp.sum(axis=0)[np.newaxis, :]
+    )  # normalize by column, i.e., within the same clone
+    # norm_X = adata.X.A / adata.X.A.sum(0)  # normalize each clone across all fates
+    df_fate_matrix = pd.DataFrame(norm_X.T, index=clone_id, columns=adata.obs_names)
+    fate_list = [",".join(adata.obs_names[x]) for x in norm_X.T > thresh]
+    fate_N = [len(adata.obs_names[x]) for x in norm_X.T > thresh]
+    mouse_N = [len(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
+    mouse_list = [",".join(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
+    df_allele_fate = pd.DataFrame(
+        {
+            "allele": clone_id,
+            "fate": fate_list,
+            "fate_N": fate_N,
+            "fate_mouse_N": mouse_N,
+            "fate_mouse": mouse_list,
+        }
+    )
+
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+    ax = sns.histplot(norm_X[norm_X > 0].flatten(), bins=50, ax=axs[0])
+    ax.set_xlabel("lineage weight")
+    sns.histplot(df_allele_fate["fate_N"], ax=axs[1])
+    sns.histplot(df_allele_fate["fate_mouse_N"], ax=axs[2])
+    plt.tight_layout()
+    return df_allele_fate, df_fate_matrix  # [df_allele_fate["mouse_N"] < 2]
