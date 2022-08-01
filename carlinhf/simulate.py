@@ -1,25 +1,9 @@
-import os
-import time
-from copy import deepcopy
-from pathlib import Path
-
-import cospar as cs
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
-import scipy.sparse as ssp
-import seaborn as sns
-from matplotlib import pyplot as plt
-from scipy.io import loadmat
-from scipy.stats import linregress
-from tqdm import tqdm
 
 import carlinhf.lineage as lineage
-import carlinhf.plotting as plotting
 
 rng = np.random.default_rng()
-# plt.rcParams["text.usetex"] = True
 
 ##########################
 
