@@ -151,7 +151,7 @@ def plot_venn2(data_1, data_2, labels=["1", "2"]):
 
 def visualize_tree(
     input_tree,
-    color_coding=None,
+    color_coding: dict = None,
     mode="r",
     width=60,
     height=60,
@@ -160,7 +160,38 @@ def visualize_tree(
     figure_path=".",
 ):
     """
-    mode: r or c
+    Visualize a tree structured in ete3 style.
+
+    We provide the option to color code the leaf of the tree. For example, if the leaf nodes represent single cells,
+    and some are more similar than others according to other information, we may impose the same color for these similar cells.
+    Then, visualization with this color setting will allow us see how the tree structure recaptulate the similarity of these cells. If so, similar colors tend to cluster together.
+
+    This function will require a full installation of the ete3 packages (which are not part of the default cospar installation), including ete3, ete_toolchain, PyQt5, QtPy. Please run the following to install.
+
+    ```bash
+    conda install -c etetoolkit ete3 ete_toolchain
+    pip install PyQt5
+    pip install QtPy
+    ```
+
+    Parameters
+    ----------
+    input_tree:
+        A tree stored in ete3 style. This can be the output from running `cs.tl.fate_hierarchy(adata, source="X_clone")`, where the resulting tree will be stored at my_tree = adata.uns["fate_hierarchy_X_clone"]["tree"].
+    color_coding:
+        A dictionary for mapping the leaf names to a specific color. An example color_coding will be {'node_1':"#e5f5f9",'node_2':"#99d8c9",...}. 'node_1' and 'node_2' will be the leaf node names.
+    mode:
+        The mode of plotting. {'r', 'c'}. 'c' is the circular mode, and 'r' is the rectangular mode.
+    width:
+        Width of the tree plot.
+    height:
+        Height of the tree plot.
+    dpi:
+        Resolution of the tree plot.
+    data_des:
+        Label for saving the figure, i.e., figure name.
+    figure_path:
+        Figure directory.
     """
 
     from ete3 import AttrFace, NodeStyle, Tree, TreeStyle, faces
