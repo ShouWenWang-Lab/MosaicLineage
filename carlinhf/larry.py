@@ -24,6 +24,72 @@ from umi_tools import UMIClusterer
 #########################################################
 
 
+##############################
+
+## load data, denoise sequences
+
+###############################
+
+
+def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
+    """
+    From f"{data_path}/{lib}.LARRY.fastq.gz" --> f"{data_path}/{lib}.LARRY.csv"
+    where the read number of each molecular is calculated.
+
+    We use cell barcode + sample id to jointly update the cell_id tag
+    We use the cell barcode + umi to jointly define the umi_id tag
+
+    We first load all data into memory before extract the read information. This assumes that
+    the data is not too big to fit into the memory (<10G ?)
+    """
+
+    df_list = []
+    for lib in sample_list:
+        csv_file_name = f"{data_path}/{lib}.LARRY.csv"
+        if os.path.exists(csv_file_name) and (not recompute):
+            data_table = pd.read_csv(csv_file_name, index_col=0)
+        else:
+            counts = {}
+            f = gzip.open(f"{data_path}/{lib}.LARRY.fastq.gz")
+
+            # for other files that starts with a normal line, skip the above two lines and run directly:
+            print(f"Reading in library {lib}")
+            all_lines = f.readlines()
+            current_tag = []
+            for x in tqdm(all_lines):
+                l = x.decode("utf-8").strip("\n")
+                if l == "":
+                    current_tag = []
+                elif l[0] == ">":
+                    current_tag = l[1:].split(",")
+                elif l != "" and len(current_tag) == 3:
+                    current_tag.append(l)
+                    current_tag = tuple(current_tag)
+                    if not current_tag in counts:
+                        counts[current_tag] = 0
+                    counts[current_tag] += 1
+
+            sample_id = [k[0] for k, v in counts.items()]
+            cell_bc = [k[1] for k, v in counts.items()]
+            umi_id = [k[2] for k, v in counts.items()]
+            gfp_bc_id = [k[3] for k, v in counts.items()]
+            read_count = [v for k, v in counts.items()]
+            library_id = [lib for _ in range(len(sample_id))]
+
+            data_table = pd.DataFrame(
+                {"library": library_id, "umi": umi_id, "cell_bc": cell_bc}
+            )
+            data_table["umi_id"] = data_table["cell_bc"] + "_" + data_table["umi"]
+            data_table["cell_id"] = data_table["library"] + "_" + data_table["cell_bc"]
+            data_table["clone_id"] = gfp_bc_id
+            data_table["read"] = read_count
+            data_table.to_csv(f"{data_path}/{lib}.LARRY.csv")
+
+        df_list.append(data_table)
+    df_all = pd.concat(df_list)
+    return df_all
+
+
 def denoise_clonal_data(
     df_raw,
     target_key="clone_id",
@@ -43,7 +109,10 @@ def denoise_clonal_data(
     Parameters:
     -----------
     df_raw:
-        The raw data
+        The raw data table, each row is a unique molecular, identified by
+        ["library", "cell_id", "cell_bc", "clone_id", "umi"], with a 'read' indicating
+        its read number. The raw data can be output from `generate_LARRY_read_count_table`,
+        or `CARLIN.CARLIN_raw_reads` (typically further filtered by CARLIN.CARLIN_preprocessing)
     target_key:
         The target field to correct sequeuncing/PCR errors.
     denoise_method:
@@ -136,22 +205,6 @@ def denoise_clonal_data(
             QC_read_coverage(df_HQ, target_key=target_key)
 
     return df_HQ_1
-
-
-def QC_read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
-    df_out = group_cells(df, group_keys=[target_key])
-    ax = sns.histplot(df_out["read"], log_scale=log_scale, cumulative=False, **kwargs)
-    ax.set_xlabel(f"Total read of corrected {target_key}")
-    ax.set_ylabel(f"Counts")
-    return ax
-
-
-def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=True):
-    df_out = df_HQ.groupby(group_keys).agg({"read": "sum"})
-    if ("umi" not in group_keys) and count_UMI and ("umi" in df_HQ.columns):
-        df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
-    df_out = df_out.reset_index()
-    return df_out
 
 
 def denoise_sequence(
@@ -333,6 +386,21 @@ def denoise_sequence(
     return mapping, new_seq_list
 
 
+##############################
+
+## QC functions
+
+###############################
+
+
+def QC_read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
+    df_out = group_cells(df, group_keys=[target_key])
+    ax = sns.histplot(df_out["read"], log_scale=log_scale, cumulative=False, **kwargs)
+    ax.set_xlabel(f"Total read of corrected {target_key}")
+    ax.set_ylabel(f"Counts")
+    return ax
+
+
 def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=False):
     """
     First, remove duplicate sequences
@@ -367,26 +435,6 @@ def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=
             distance[j, :] = np.sum(target_seqs != source_seqs[j], 1)
 
     return distance
-
-
-def plot_seq_distance(distance, **kwargs):
-    np.fill_diagonal(distance, np.inf)
-    min_distance = distance.min(axis=1)
-    ax = sns.histplot(min_distance, **kwargs)
-    ax.set_xlabel("Minimum intra-seq hamming distance")
-    return min_distance
-
-
-def seq_partition(n, seq):
-    """
-    Partition sequence into every n-bp
-
-    eg. 'ABCDEF', n=2 -> [['AB'],['CD'],['EF']]
-    """
-    if n == 1:
-        return list(seq)
-    else:
-        return ["".join(x) for x in tz.partition(n, seq)]
 
 
 def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
@@ -516,63 +564,12 @@ def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=2, log_scale=T
         ax.set_ylabel(f"Unique {key} number")
 
 
-def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
-    """
-    From f"{data_path}/{lib}.LARRY.fastq.gz" --> f"{data_path}/{lib}.LARRY.csv"
-    where the read number of each molecular is calculated.
-
-    We use cell barcode + sample id to jointly update the cell_id tag
-    We use the cell barcode + umi to jointly define the umi_id tag
-
-    We first load all data into memory before extract the read information. This assumes that
-    the data is not too big to fit into the memory (<10G ?)
-    """
-
-    df_list = []
-    for lib in sample_list:
-        csv_file_name = f"{data_path}/{lib}.LARRY.csv"
-        if os.path.exists(csv_file_name) and (not recompute):
-            data_table = pd.read_csv(csv_file_name, index_col=0)
-        else:
-            counts = {}
-            f = gzip.open(f"{data_path}/{lib}.LARRY.fastq.gz")
-
-            # for other files that starts with a normal line, skip the above two lines and run directly:
-            print(f"Reading in library {lib}")
-            all_lines = f.readlines()
-            current_tag = []
-            for x in tqdm(all_lines):
-                l = x.decode("utf-8").strip("\n")
-                if l == "":
-                    current_tag = []
-                elif l[0] == ">":
-                    current_tag = l[1:].split(",")
-                elif l != "" and len(current_tag) == 3:
-                    current_tag.append(l)
-                    current_tag = tuple(current_tag)
-                    if not current_tag in counts:
-                        counts[current_tag] = 0
-                    counts[current_tag] += 1
-
-            sample_id = [k[0] for k, v in counts.items()]
-            cell_bc = [k[1] for k, v in counts.items()]
-            umi_id = [k[2] for k, v in counts.items()]
-            gfp_bc_id = [k[3] for k, v in counts.items()]
-            read_count = [v for k, v in counts.items()]
-            library_id = [lib for _ in range(len(sample_id))]
-
-            data_table = pd.DataFrame(
-                {"library": library_id, "umi": umi_id, "cell_bc": cell_bc}
-            )
-            data_table["umi_id"] = data_table["cell_bc"] + "_" + data_table["umi"]
-            data_table["cell_id"] = data_table["library"] + "_" + data_table["cell_bc"]
-            data_table["clone_id"] = gfp_bc_id
-            data_table["read"] = read_count
-            data_table.to_csv(f"{data_path}/{lib}.LARRY.csv")
-
-        df_list.append(data_table)
-    df_all = pd.concat(df_list)
-    return df_all
+def plot_seq_distance(distance, **kwargs):
+    np.fill_diagonal(distance, np.inf)
+    min_distance = distance.min(axis=1)
+    ax = sns.histplot(min_distance, **kwargs)
+    ax.set_xlabel("Minimum intra-seq hamming distance")
+    return min_distance
 
 
 def print_statistics(df, read_cutoff=None):
@@ -584,6 +581,33 @@ def print_statistics(df, read_cutoff=None):
         if key in df.columns:
             print(f"{key} number: {len(set(df_tmp[key]))}")
     print(f"total reads: {np.sum(df_tmp['read'])/1000:.0f}K")
+
+
+##################
+
+## miscellaneous
+
+##################
+
+
+def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=True):
+    df_out = df_HQ.groupby(group_keys).agg({"read": "sum"})
+    if ("umi" not in group_keys) and count_UMI and ("umi" in df_HQ.columns):
+        df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
+    df_out = df_out.reset_index()
+    return df_out
+
+
+def seq_partition(n, seq):
+    """
+    Partition sequence into every n-bp
+
+    eg. 'ABCDEF', n=2 -> [['AB'],['CD'],['EF']]
+    """
+    if n == 1:
+        return list(seq)
+    else:
+        return ["".join(x) for x in tz.partition(n, seq)]
 
 
 def remove_cells(
@@ -612,7 +636,7 @@ def remove_cells(
 
 def rename_library_info(df_all, mapping_dictionary):
     """
-    Mapping one library name into another.
+    Mapping one library name into another, and also update the cell_id (coupled with library info)
 
     As an example:
     mapping_dictionary={'LARRY_Lime_33':'Lime_RNA_101','LARRY_Lime_34':'Lime_RNA_102', 'LARRY_Lime_35':'Lime_RNA_103',
@@ -623,25 +647,3 @@ def rename_library_info(df_all, mapping_dictionary):
         df_all["library"][df_all.library == key] = mapping_dictionary[key]
     df_all.loc[:, "cell_id"] = df_all["library"] + "_" + df_all["cell_bc"]
     return df_all
-
-
-def merge_adata_across_times(
-    adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scLimeCat"
-):
-    adata_t1_ = adata_t1.raw.to_adata()
-    adata_t2_ = adata_t2.raw.to_adata()
-    adata_t1_.obsm[embed_key] = adata_t1_.obsm[embed_key] + X_shift
-
-    adata_t1_.obs["time_info"] = ["1" for x in range(adata_t1_.shape[0])]
-    adata_t2_.obs["time_info"] = ["2" for x in range(adata_t2_.shape[0])]
-
-    adata_t1_.obs["leiden"] = [f"t1_{x}" for x in adata_t1_.obs["leiden"]]
-    adata_t2_.obs["leiden"] = [f"t2_{x}" for x in adata_t2_.obs["leiden"]]
-
-    adata = adata_t1_.concatenate(adata_t2_, join="outer")
-    adata.obs_names = [
-        xx.split("-")[0] for xx in adata.obs_names
-    ]  # we assume the names are unique
-    adata.obsm["X_emb"] = adata.obsm[embed_key]
-    adata.uns["data_des"] = [data_des]
-    return adata
