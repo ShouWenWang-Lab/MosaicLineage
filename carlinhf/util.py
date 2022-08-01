@@ -1,8 +1,4 @@
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
-from cospar.pl import custom_hierachical_ordering
-from scipy.stats import linregress
 
 rng = np.random.default_rng()
 
@@ -11,6 +7,32 @@ rng = np.random.default_rng()
 # Concise utility functions
 
 ############################
+
+
+def map_dictionary(X1, X2):
+    """
+    construct a dictionary from x1 in X1 to x2 in X2, if x2 contains x1
+    """
+    dict_tmp = {}
+    for x1 in X1:
+        for x2 in X2:
+            if x1 in x2:
+                dict_tmp[x1] = x2
+    return dict_tmp
+
+
+def extract_first_sample_from_a_nesting_list(SampleList):
+    """
+    For a nesting list like ['a',['b','c'],['d','e','f']],
+    it will return the first in each element, i.e, ['a','b','d']
+    """
+    selected_fates = []
+    for x in SampleList:
+        if type(x) is list:
+            selected_fates.append(x[0])
+        else:
+            selected_fates.append(x)
+    return selected_fates
 
 
 def estimate_exponent(X, xmin=None):
