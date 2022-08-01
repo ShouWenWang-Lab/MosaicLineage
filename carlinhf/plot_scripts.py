@@ -1,17 +1,13 @@
 import os
-from random import sample
-from re import A
-from shutil import SameFileError
 
 import cospar as cs
 import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import seaborn as sns
-import yaml
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
-from nbformat import read
+from scipy.spatial import distance
 
 import carlinhf.CARLIN as car
 import carlinhf.lineage as lineage
@@ -20,29 +16,41 @@ import carlinhf.plotting as plotting
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
 
-##################################################
 
 # This file contains lousy functions that are often from one-off analysis.
 # It primarily focuses with plotting and ends with the plotting
 
-###################################################
+
+####################################
+
+# Comparing bulk Cas9 and DNTT data
+
+####################################
 
 
-def remove_samples(df, removed_sample):
-    ## remove some negative controls
+def remove_samples(df, removed_sample=None):
+    """
+    remove some samples in a dataframe
+    """
+
     if removed_sample is not None:
-        del_samples = []
-        for x in df["sample"]:
-            if np.sum([y in x for y in removed_sample]) > 0:
-                del_samples.append(x)
-
-        df_new = df[~df["sample"].isin(del_samples)]
+        df_new = df[~df["sample"].isin(removed_sample)]
     else:
         df_new = df
     return df_new
 
 
-def mutation_statistics_box_plot(df, sample_key, removed_sample=None):
+def mutation_statistics_box_plot(
+    df,
+    sample_key,
+    removed_sample=None,
+    keys=["ave_del_len", "ave_insert_len", "ins_del_ratio_ratio_by_eventful_UMI"],
+    y_labels=[
+        "Average deletion length",
+        "Average insertion length",
+        "(Insertion #)/(deletion #): per UMI",
+    ],
+):
     """
     df_noMerge: a
     """
@@ -53,13 +61,6 @@ def mutation_statistics_box_plot(df, sample_key, removed_sample=None):
     else:
         removed_sample.append("merge_all")
     df_noM_new = remove_samples(df, removed_sample)
-
-    keys = ["ave_del_len", "ave_insert_len", "ins_del_ratio_ratio_by_eventful_UMI"]
-    y_labels = [
-        "Average deletion length",
-        "Average insertion length",
-        "(Insertion #)/(deletion #): per UMI",
-    ]
 
     for j, key in enumerate(keys):
         fig, ax = plt.subplots(figsize=(3, 4))
@@ -80,8 +81,10 @@ def mutation_statistics_box_plot(df, sample_key, removed_sample=None):
         fig.savefig(f"figure/{sample_key}/{key}_202105.pdf")
 
 
-def mutation_statistics_distribution(df_LL, df_SB, sample_key):
+def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     """
+    Compare mutation statistics per allele between two data source
+
     df_LL: allele count dataframe from Cas9-TdT mouse
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
@@ -321,8 +324,12 @@ def mutation_statistics_distribution(df_LL, df_SB, sample_key):
     )
 
 
-def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9"):
+def mutation_statistics_distribution_per_allele_single_input(
+    df_SB, sample_key, label="Cas9"
+):
     """
+    Check mutation statistics per allele from a single data source
+
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
     """
@@ -524,6 +531,8 @@ def mutation_statistics_distribution_single_input(df_SB, sample_key, label="Cas9
 
 def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
     """
+    Mutation statistics per UMI between two data source
+
     df_LL: allele count dataframe from Cas9-TdT mouse
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
@@ -871,7 +880,70 @@ def plot_deletion_statistics(df):
     ax.set_xlim([0, 50])
 
 
-def three_locus_comparison_plots(df_all, sample_key):
+####################
+
+# Miscellaneous
+
+####################
+
+
+def three_locus_comparison_plots(
+    df_all,
+    sample_key,
+    QC_metric=[
+        "tot_fastq_N",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
+        "valid_read_structure (read_frac)",
+        "valid_lines (read_frac)",
+        "common_UMIs (read_frac)",
+        "consensus_calling_fraction",
+        "UMI_per_cell",
+        "cell_number",
+        "Mean_read_per_edited_UMI",
+        "UMI_per_clone",
+    ],
+    QC_x_label=[
+        "Total fastq reads",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
+        "Read fraction (valid structure)",
+        "Read fraction (valid reads)",
+        "Read fraction (common UMI)",
+        "Read frac. (allele calling)",
+        "UMI per cell",
+        "Cell number",
+        "Mean reads per edited UMI",
+        "UMI per clone",
+    ],
+    performance_metric=[
+        "edit_UMI_fraction",
+        "total_alleles",
+        "singleton",
+        "singleton_fraction",
+        "total_alleles_norm_fraction",
+        "singleton_norm_fraction",
+        "Allele output per reads (normalized)",
+    ],
+    performance_x_label=[
+        "Edited cell fraction (edited UMI fraction)",
+        "Total allele number",
+        "Singleton number",
+        "Singleton fraction",
+        "Percent of alleles within a locus",
+        "Percent of singleton within a locus",
+        "Allele output per reads (normalized)",
+    ],
+):
+    """
+    Comparing CC,TC,RC profiling, for both QC, and
+    evaluating the allele diversity in each locus.
+
+    QC_metric and QC_x_label has one-to-one correspondence
+    performance_metric and performance_x_label has one-to-one correspondence
+    """
 
     df_all["singleton_fraction"] = df_all["singleton"] / df_all["total_alleles"]
     df_all["consensus_calling_fraction"] = (
@@ -886,56 +958,6 @@ def three_locus_comparison_plots(df_all, sample_key):
 
     df_all["UMI_per_clone"] = df_all["UMI_called"] / df_all["total_alleles"]
 
-    QC_metric = [
-        "tot_fastq_N",
-        "valid_5_primer (read_frac)",
-        "valid_3_primer (read_frac)",
-        "valid_2_seq (read_frac)",
-        "valid_read_structure (read_frac)",
-        "valid_lines (read_frac)",
-        "common_UMIs (read_frac)",
-        "consensus_calling_fraction",
-        "UMI_per_cell",
-        "cell_number",
-        "Mean_read_per_edited_UMI",
-        "UMI_per_clone",
-    ]
-
-    qc_x_label = [
-        "Total fastq reads",
-        "valid_5_primer (read_frac)",
-        "valid_3_primer (read_frac)",
-        "valid_2_seq (read_frac)",
-        "Read fraction (valid structure)",
-        "Read fraction (valid reads)",
-        "Read fraction (common UMI)",
-        "Read frac. (allele calling)",
-        "UMI per cell",
-        "Cell number",
-        "Mean reads per edited UMI",
-        "UMI per clone",
-    ]
-
-    performance_metric = [
-        "edit_UMI_fraction",
-        "total_alleles",
-        "singleton",
-        "singleton_fraction",
-        "total_alleles_norm_fraction",
-        "singleton_norm_fraction",
-        "Allele output per reads (normalized)",
-    ]
-
-    performance_x_label = [
-        "Edited cell fraction (edited UMI fraction)",
-        "Total allele number",
-        "Singleton number",
-        "Singleton fraction",
-        "Percent of alleles within a locus",
-        "Percent of singleton within a locus",
-        "Allele output per reads (normalized)",
-    ]
-
     for j, qc in enumerate(QC_metric):
         if qc in df_all.columns:
             g = sns.catplot(
@@ -948,7 +970,7 @@ def three_locus_comparison_plots(df_all, sample_key):
                 aspect=1.2,
                 hue_order=["Col", "Tigre", "Rosa"],
             )
-            g.ax.set_ylabel(qc_x_label[j])
+            g.ax.set_ylabel(QC_x_label[j])
             g.ax.set_xlabel("")
             g.ax.set_title("QC")
             plt.xticks(rotation=90)
@@ -986,10 +1008,37 @@ def analyze_cell_coupling(
     short_names=None,
     source=None,
     remove_single_lineage_clone=False,
+    plot_sample_number=True,
+    plot_barcodes_binary=True,
+    plot_barcodes_normalize=True,
+    plot_cell_count=True,
+    plot_hierarchy=True,
+    plot_pie=False,
+    plot_correlation=True,
+    order_map=False,
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
 
+    You can group different samples together through list nesting: e.g.
+    SampleList=[['a','b'],'c'], and short_names=['1','2']
+    Then, 'a','b' will be grouped under name '1', and 'c' will under name '2'
+    Downstream clustering analysis will focus on mega cluster '1' and '2'.
+    The order of SampleList will also affect the organization of the barcode heatmap
+
+    This analysis also considers the actual cell number when the information is available
+    under the root foder for the experiment, i.e., the file f"{data_path}/../../sample_info.csv"
+    exists.
+
+    Parameters
+    ----------
+    data_path:
+        A path/to/sample_folders
+    SampleList:
+        A list of samples to use under this folder. Allows to nesting to group samples.
+    df_ref:
+        An allele bank as a reference for the expected frequency and
+        concurrence across samples of an allele
     source:
         Supfix to the same name, typically {'cCARLIN','Tigre','Rosa'}.
         Needed for joint profiling
@@ -1020,16 +1069,29 @@ def analyze_cell_coupling(
     df_all = car.extract_CARLIN_info(data_path, Flat_SampleList)
     df_all = df_all.merge(df_ref, on="allele", how="left")
 
+    ignore = True
     if os.path.exists(f"{data_path}/../../sample_info.csv"):
-        print("Correct UMI count information by cell number information")
-        df_sample_info = pd.read_csv(f"{data_path}/../../sample_info.csv")
-        df_all = df_all.merge(df_sample_info, left_on="sample", right_on="sample_id")
-        df_all["orig_obs_UMI_count"] = df_all["UMI_count"]
-        df_all["UMI_count"] = df_all["UMI_count"] / df_all["cell_number"]
-        df_all["UMI_count"] = df_all["UMI_count"] / np.max(df_all["UMI_count"])
+        df_sample_info = (
+            pd.read_csv(f"{data_path}/../../sample_info.csv")
+            .dropna()
+            .filter(["cell_number", "sample_id"])
+            .rename(columns={"sample_id": "sample"})
+        )
+        df_all = df_all.merge(df_sample_info, on="sample", how="left")
+        if not ignore:
+            print("Correct UMI count information by cell number information")
+            df_all["orig_UMI_count"] = df_all["UMI_count"]
+            df_all["UMI_count"] = (
+                df_all["UMI_count"] / df_all["cell_number"]
+            )  # normalize by cell_number
+            df_all["UMI_count"] = (
+                df_all["UMI_count"]
+                / np.max(df_all["UMI_count"])
+                * np.max(df_all["orig_UMI_count"])
+            )  # normalize within the column by max value
     else:
         print(
-            "cell number sample_info.csv does not exist. Do not perform cell number correction for the obs_UMI_count"
+            "cell number sample_info.csv does not exist or ignore cell number information. Do not perform cell number correction for the obs_UMI_count"
         )
 
     df_HQ = df_all.query("invalid_alleles!=True")
@@ -1043,25 +1105,22 @@ def analyze_cell_coupling(
         df_HQ, count_value_key="UMI_count", use_UMI=True
     )
 
-    # sample number histogram
-    sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
-    fig, ax = plt.subplots()
-    plt.hist(sample_num_per_clone)
-    # plt.yscale('log')
-    plt.xlabel("Number of samples per clone")
-    plt.ylabel("Histogram")
+    if plot_sample_number:
+        # sample number histogram
+        sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
+        fig, ax = plt.subplots()
+        plt.hist(sample_num_per_clone)
+        # plt.yscale('log')
+        plt.xlabel("Number of samples per clone")
+        plt.ylabel("Histogram")
 
     # barcode heatmap
     adata_orig.uns["data_des"] = ["coarse"]
-    cs.settings.set_figure_params(format="png", figsize=[4, 4], dpi=75, fontsize=15)
-    cs.pl.barcode_heatmap(
-        adata_orig,
-        selected_fates=selected_fates,
-        log_transform=True,
-        order_map_x=False,
-        plot=False,
+    # cs.settings.set_figure_params(format="png", figsize=[4, 4], dpi=75, fontsize=15)
+    coarse_X_clone, selected_fates = cs.tl.coarse_grain_clone_over_cell_clusters(
+        adata_orig, selected_fates=selected_fates
     )
-    coarse_X_clone = adata_orig.uns["barcode_heatmap"]["coarse_X_clone"]
+
     if remove_single_lineage_clone:
         print("Warning: Remove single lineage clones")
         print("coarse_X_clone shape:", coarse_X_clone.shape)
@@ -1071,165 +1130,110 @@ def analyze_cell_coupling(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names
     )
 
+    if plot_barcodes_normalize:
+        cs.pl.barcode_heatmap(
+            adata,
+            normalize=True,
+            selected_fates=short_names,
+            order_map_x=False,
+            order_map_y=False,
+            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][0],
+        )
+    if plot_barcodes_binary:
+        cs.pl.barcode_heatmap(
+            adata,
+            binarize=True,
+            selected_fates=short_names,
+            order_map_x=False,
+            order_map_y=False,
+            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][0],
+        )
+        lineage.conditional_heatmap(
+            coarse_X_clone,
+            short_names,
+            mode="or",
+            included_fates=short_names[:3],
+            fig_height=1 * plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][0],
+        )
+
     adata.obs_names = short_names
     adata.var_names = adata_orig.var_names
-
-    cs.pl.barcode_heatmap(adata, binarize=True, selected_fates=short_names)
     fate_names = short_names
 
-    # cell count
-    fig, ax = plt.subplots(figsize=(10, 4))
-    plt.bar(
-        np.arange(coarse_X_clone.shape[0]),
-        (coarse_X_clone > 0).sum(1),
-        tick_label=fate_names,
-    )
-    plt.xticks(rotation="vertical")
-    plt.ylabel("Clone number")
-
-    # hierarchy
-    cs.tl.fate_hierarchy(adata, source="X_clone")
-    cs.plotting.fate_hierarchy(adata, source="X_clone")
-
-    # fate coupling
-    cs.tl.fate_coupling(adata, method="SW", source="X_clone")
-    cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
-    cs.plotting.fate_coupling(adata, source="X_clone", vmin=0)
-
-    # # correlation
-    # adata.obs["time_info"] = adata.obs["state_info"].apply(lambda x: x.split("-")[1])
-    # df = cs.tl.get_normalized_coarse_X_clone(adata, short_names)
-
-    # df_t = df  # .iloc[:7]
-    # coarse_X_clone = df_t.to_numpy()
-
-    # color_map = plt.cm.coolwarm
-    # # ax=cs.pl.heatmap(coarse_X_clone,order_map_x=True,order_map_y=False,
-    # #                  y_ticks=df.index,fig_width=10,
-    # #                  color_bar_label='Normalized fraction')
-    # # ax.set_xlabel('Clone ID')
-    # # ax.set_title('Intra cell-type & clone normalization')
-
-    # ax = cs.pl.heatmap(
-    #     np.corrcoef(coarse_X_clone),
-    #     order_map_x=True,
-    #     order_map_y=True,
-    #     x_ticks=short_names,
-    #     y_ticks=short_names,
-    #     color_bar_label="Pearson correlation",
-    #     fig_height=6,
-    #     fig_width=8,
-    #     color_map=color_map,
-    #     # vmax=0.3,
-    #     # vmin=-0.3,
-    # )
-    # ax.set_title("Pan-celltype correlation")
-    return adata, df_all
-
-
-def annotate_clone_fate(adata, thresh=0.2):
-    adata.obs["mouse"] = [str(x).split("-")[0] for x in adata.obs_names]
-    clone_id = adata.var_names
-    # df = cs.tl.get_normalized_coarse_X_clone(adata, adata.obs_names)
-    norm_X = adata.X.A / adata.X.A.sum(0)  # normalize each clone across all fates
-    df_normX_fate = pd.DataFrame(norm_X.T, index=clone_id, columns=adata.obs_names)
-    fate_list = [",".join(adata.obs_names[x]) for x in norm_X.T > thresh]
-    fate_N = [len(adata.obs_names[x]) for x in norm_X.T > thresh]
-    mouse_N = [len(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
-    mouse_list = [",".join(set(adata.obs["mouse"][x])) for x in norm_X.T > thresh]
-    df_anno = pd.DataFrame(
-        {
-            "allele": clone_id,
-            "fate": fate_list,
-            "fate_N": fate_N,
-            "fate_mouse_N": mouse_N,
-            "fate_mouse": mouse_list,
-        }
-    )
-
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-    ax = sns.histplot(norm_X[norm_X > 0].flatten(), bins=50, ax=axs[0])
-    ax.set_xlabel("lineage weight")
-    sns.histplot(df_anno["fate_N"], ax=axs[1])
-    sns.histplot(df_anno["fate_mouse_N"], ax=axs[2])
-    plt.tight_layout()
-    return df_anno, df_normX_fate  # [df_anno["mouse_N"] < 2]
-
-
-def load_single_cell_CARLIN(root_path, plate_map, read_cutoff=2, locus=None):
-    SampleList = car.get_SampleList(root_path)
-    data_path = os.path.join(
-        root_path, "CARLIN", f"results_cutoff_override_{read_cutoff}"
-    )
-    df_out = car.extract_CARLIN_info(data_path, SampleList)
-
-    df_out["locus"] = df_out["sample"].apply(lambda x: x[-2:])
-
-    df_ref = pd.read_csv(
-        f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
-    ).filter(["allele", "expected_frequency", "sample_count"])
-    df_out = df_out.merge(df_ref, on="allele", how="left")
-    df_out["plate_ID"] = (
-        df_out["sample"].apply(lambda x: x[:-3]).map(plate_map)
-    )  # .astype('category')
-
-    return df_out
-
-
-def get_clone_anno(locus, sample_map, Bulk_CARLIN_dir, target_sample):
-    df_all_fate = pd.read_csv(
-        f"{Bulk_CARLIN_dir}/{locus}_CARLIN_{target_sample}_all.csv"
-    )
-    df_all_fate["sample"] = df_all_fate["sample"].map(sample_map).astype("category")
-    adata = lineage.generate_adata_sample_by_allele(df_all_fate)
-    adata.obs_names = adata.obs["state_info"]
-    (df_clone_fate, df_normX_fate) = annotate_clone_fate(adata, thresh=0.1)
-    df_normX_fate.index = f"{locus}_" + df_normX_fate.index
-    return adata, df_clone_fate, df_normX_fate
-
-
-def integrate_early_clone_and_fate(
-    df_clone_fate_tmp,
-    SC_CARLIN_dir,
-    plate_map,
-    locus="CC",
-    BC_max_sample_count=5,
-    BC_max_freq=10 ** (-4),
-    read_cutoff=2,
-):
-    root_path = SC_CARLIN_dir + f"/{locus}"
-    df_sc_tmp = load_single_cell_CARLIN(
-        root_path, plate_map, locus=locus, read_cutoff=read_cutoff
-    )
-    df_sc_tmp = df_sc_tmp.merge(df_clone_fate_tmp, on="allele")
-    df_sc_tmp["clone_id"] = f"{locus}_" + df_sc_tmp["allele"]
-
-    df_final_tmp = (
-        df_sc_tmp[df_sc_tmp["mouse"] == df_sc_tmp["fate_mouse"]]
-        .fillna(0)
-        .assign(
-            HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-            & (x["expected_frequency"] <= BC_max_freq)
+    if plot_cell_count:
+        # cell count
+        fig, ax = plt.subplots(figsize=(10, 4))
+        plt.bar(
+            np.arange(coarse_X_clone.shape[0]),
+            (coarse_X_clone > 0).sum(1),
+            tick_label=fate_names,
         )
-        .query("HQ==True")
-    )
+        plt.xticks(rotation="vertical")
+        plt.ylabel("Clone number")
 
-    CB_list = []
-    CB_flat = []
-    Clone_id_flat = []
-    for j in range(len(df_final_tmp)):
-        df_series = df_final_tmp.iloc[j]
-        plate_id = df_series["plate_ID"]
-        tmp = [plate_id + "_RNA" + "_" + x for x in df_series["CB"].split(",")]
-        CB_list.append(",".join(tmp))
-        CB_flat += tmp
-        Clone_id_flat += [df_series["clone_id"] for _ in tmp]
+    if plot_hierarchy:
+        # hierarchy
+        # cs.tl.fate_hierarchy(adata, source="X_clone", method="SW")
+        # cs.pl.fate_hierarchy(adata, source="X_clone")
 
-    df_final_tmp["RNA_id"] = CB_list
-    df_cell_to_BC = pd.DataFrame({"RNA_id": CB_flat, "clone_id": Clone_id_flat}).merge(
-        df_final_tmp.filter(["clone_id", "fate"]), on="clone_id", how="left"
-    )
-    return df_final_tmp, df_cell_to_BC
+        # fate coupling
+        cs.tl.fate_coupling(
+            adata, method="SW", source="X_clone", selected_fates=short_names
+        )
+        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+        cs.pl.fate_coupling(
+            adata,
+            source="X_clone",
+            vmin=0,
+            order_map_x=order_map,
+            order_map_y=order_map,
+            color_bar_label="Fate coupling (SW)",
+        )
+
+        # fate coupling
+        cs.tl.fate_coupling(
+            adata, method="Jaccard", source="X_clone", selected_fates=short_names
+        )
+        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+        cs.pl.fate_coupling(
+            adata,
+            source="X_clone",
+            vmin=0,
+            color_bar_label="Fate coupling (Jaccard)",
+            order_map_x=order_map,
+            order_map_y=order_map,
+        )
+
+    if plot_correlation:
+        coarse_X_clone = cs.tl.get_normalized_coarse_X_clone(
+            adata, short_names
+        ).to_numpy()
+
+        ax = cs.pl.heatmap(
+            np.corrcoef(coarse_X_clone),
+            order_map_x=order_map,
+            order_map_y=order_map,
+            x_ticks=short_names,
+            y_ticks=short_names,
+            color_bar_label="Pearson correlation",
+            color_map=plt.cm.coolwarm,
+            vmax=0.2,
+            vmin=-0.2,
+            fig_height=plt.rcParams["figure.figsize"][0],
+            fig_width=1.2 * plt.rcParams["figure.figsize"][0],
+        )
+        ax.set_title("Pan-celltype correlation")
+
+    if plot_pie:
+        fig, ax = plt.subplots(figsize=(5, 5))
+        plotting.plot_pie_chart(
+            coarse_X_clone, fate_names=short_names, include_fate=short_names[0]
+        )
+
+    return adata, df_all
 
 
 def clonal_analysis(
@@ -1312,3 +1316,74 @@ def clonal_analysis(
         )
 
 
+def visualize_sc_CARLIN_data(df_sc_data):
+    df_plot = (
+        df_sc_data.groupby(["locus", "library"])
+        .agg(
+            cell_number=("cell_bc", lambda x: len(set(x))),
+            clone_number=("clone_id", lambda x: len(set(x))),
+        )
+        .reset_index()
+    )
+    df_plot["library"] = df_plot["library"].apply(lambda x: x.split("_")[0][:-3])
+    fig, ax = plt.subplots()
+    sns.scatterplot(data=df_plot, x="cell_number", y="clone_number", hue="locus")
+
+    fig, ax = plt.subplots()
+    sns.barplot(data=df_plot, x="library", y="clone_number", hue="locus")
+    plt.xticks(rotation=90)
+    plt.ylim([0, 50])
+
+    fig, ax = plt.subplots()
+    sns.barplot(data=df_plot, x="library", y="cell_number", hue="locus")
+    plt.xticks(rotation=90)
+    plt.ylim([0, 90])
+
+    fig, ax = plt.subplots()
+    sns.scatterplot(
+        data=df_sc_data.filter(
+            ["clone_id", "read", "CARLIN_length", "locus"], axis=1
+        ).drop_duplicates(),
+        x="read",
+        y="CARLIN_length",
+        hue="locus",
+    )
+    plt.xscale("log")
+
+    # filter to count only unique alleles
+    g = sns.FacetGrid(
+        df_sc_data.filter(
+            ["clone_id", "sample_count", "locus"], axis=1
+        ).drop_duplicates(),
+        col="locus",
+    )
+    g.map(sns.histplot, "sample_count")
+
+    # filter to count only unique alleles
+    g = sns.FacetGrid(
+        df_sc_data.filter(
+            ["clone_id", "expected_frequency", "locus"], axis=1
+        ).drop_duplicates(),
+        col="locus",
+    )
+    g.map(sns.histplot, "expected_frequency")
+
+    g = sns.FacetGrid(
+        df_sc_data.filter(
+            ["clone_id", "CARLIN_length", "locus"], axis=1
+        ).drop_duplicates(),
+        col="locus",
+    )
+    g.map(sns.histplot, "CARLIN_length")
+
+    # sns.histplot(data=df_sc_data,x='CARLIN_length',bins=50,hue='locus',multiple='fill',element='poly')
+    # #plt.xscale('log')
+
+    fig, ax = plt.subplots()
+    plotting.plot_venn3(
+        df_sc_data[df_sc_data.locus == "CC"]["RNA_id"],
+        df_sc_data[df_sc_data.locus == "TC"]["RNA_id"],
+        df_sc_data[df_sc_data.locus == "RC"]["RNA_id"],
+        labels=["CC", "TC", "RC"],
+    )
+    plt.title("Cell number")
