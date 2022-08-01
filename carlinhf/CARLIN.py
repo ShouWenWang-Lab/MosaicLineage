@@ -1,23 +1,14 @@
-## This is used to put functions that are so specific that would not be very useful in other context
 import gzip
 import os
-import time
-from copy import deepcopy
-from pathlib import Path
 
-import cospar as cs
 import numpy as np
 import pandas as pd
-import scanpy as sc
 import scipy.sparse as ssp
 import seaborn as sns
-import source.help_functions as snakehf
 import yaml
 from Bio import SeqIO
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
-
-from . import larry, lineage
 
 #########################################
 
@@ -38,6 +29,13 @@ TC_CARLIN = "TCGCCGGAGTCGAGACGCTGACGATATGGAGTCGACACGACTCGCGCATACGATGGAGTCGCGAGCG
 RC_5prime = "GTACAAGTAAAGCGGCC"
 RC_3prime = "GTCTGCTGTGTGCCTTCTAGTT"
 RC_CARLIN = "GCGCCGGCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGTCGAGACGCTGACGATATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGAGAGCGCGCTCGTCGACTATGGA"
+
+
+#########################################
+
+## Call CARLIN alleles from raw data
+
+#########################################
 
 
 def consensus_sequence(df):
@@ -168,15 +166,15 @@ def CARLIN_preprocessing(
     if template.startswith("cCARLIN"):
         seq_5prime = CC_5prime
         seq_3prime = CC_3prime
-        CARLIN_seq = CC_CARLIN
+        CARLIN_seq_CC = CC_CARLIN
     elif template.startswith("Tigre"):
         seq_5prime = TC_5prime
         seq_3prime = TC_3prime
-        CARLIN_seq = TC_CARLIN
+        CARLIN_seq_TC = TC_CARLIN
     elif template.startswith("Rosa"):
         seq_5prime = RC_5prime
         seq_3prime = RC_3prime
-        CARLIN_seq = RC_CARLIN
+        CARLIN_seq_RC = RC_CARLIN
     else:
         raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
@@ -217,6 +215,52 @@ def CARLIN_preprocessing(
     )
 
 
+#########################################
+
+## extract information from CARLIN output
+
+#########################################
+
+
+def get_SampleList(root_path):
+    with open(f"{root_path}/config.yaml", "r") as stream:
+        file = yaml.safe_load(stream)
+        SampleList = file["SampleList"]
+    return SampleList
+
+
+def load_allele_info(data_path):
+    """
+    Convert allele and frequency information to a pd.DataFrame.
+
+    data_path: point to specific sample folder, e.g. path/to/results_read_cutoff_3/{sample}
+    """
+    pooled_data = loadmat(os.path.join(data_path, "allele_annotation.mat"))
+    allele_freqs = pooled_data["allele_freqs"].flatten()
+    alleles = [xx[0][0] for xx in pooled_data["AlleleAnnotation"]]
+    return pd.DataFrame({"allele": alleles, "UMI_count": allele_freqs})
+
+
+def load_allele_frequency_statistics(data_path: str, SampleList: list):
+    """
+    Return an allele-grouped frequency count table
+
+    data_path: should be at the level of samples, e.g., path/to/results_read_cutoff_3
+    """
+
+    df_list = []
+    for sample in SampleList:
+        df_temp = load_allele_info(os.path.join(data_path, sample))
+        df_list.append(df_temp)
+        print(f"{sample}: {len(df_temp)}")
+    df_raw = pd.concat(df_list).reset_index()
+    df_raw["sample_count"] = 1
+    df_new = df_raw.groupby("allele", as_index=False).agg(
+        {"UMI_count": "sum", "sample_count": "sum"}
+    )
+    return df_new
+
+
 def extract_CARLIN_info(
     data_path,
     SampleList,
@@ -225,7 +269,7 @@ def extract_CARLIN_info(
     Extract CARLIN information, like alleles, colonies, UMI count info
 
     data_path:
-        The root dir to all the samples
+        The root dir to all the samples, e.g. path/to/results_read_cutoff_3
     SampleList:
         The list of desired samples to load
     """
@@ -233,7 +277,7 @@ def extract_CARLIN_info(
     tmp_list = []
     for sample in SampleList:
         base_dir = os.path.join(data_path, sample)
-        df_tmp = lineage.load_allele_info(base_dir)
+        df_tmp = load_allele_info(base_dir)
         df_tmp["sample"] = sample.split("_")[0]
         df_tmp["mouse"] = sample.split("-")[0]
 
@@ -276,7 +320,7 @@ def CARLIN_output_to_cell_by_barcode_long_table(df_input):
     Convert output from extract_CARLIN_info (a wide table)
     to a two column (cell, and clone_id) long table.
     """
-    CB_list = []
+
     CB_flat = []
     Clone_id_flat = []
     for j in range(len(df_input)):
@@ -290,48 +334,23 @@ def CARLIN_output_to_cell_by_barcode_long_table(df_input):
     return df_ref_flat
 
 
-def get_SampleList(root_path):
-    with open(f"{root_path}/config.yaml", "r") as stream:
-        file = yaml.safe_load(stream)
-        SampleList = file["SampleList"]
-    return SampleList
-
-
-def load_allele_info(data_path):
-    pooled_data = loadmat(os.path.join(data_path, "allele_annotation.mat"))
-    allele_freqs = pooled_data["allele_freqs"].flatten()
-    alleles = [xx[0][0] for xx in pooled_data["AlleleAnnotation"]]
-    return pd.DataFrame({"allele": alleles, "UMI_count": allele_freqs})
-
-
-def load_allele_frequency_statistics(data_path: str, SampleList: list):
-    """
-    data_path: should be at the level of samples, e.g., path/to/results_read_cutoff_3
-
-    Return an allele-grouped frequency count table
-    """
-
-    df_list = []
-    for sample in SampleList:
-        df_temp = load_allele_info(os.path.join(data_path, sample))
-        df_list.append(df_temp)
-        print(f"{sample}: {len(df_temp)}")
-    df_raw = pd.concat(df_list).reset_index()
-    df_raw["sample_count"] = 1
-    df_new = df_raw.groupby("allele", as_index=False).agg(
-        {"UMI_count": "sum", "sample_count": "sum"}
-    )
-    return df_new
-
-
 def merge_three_locus(
     data_path_CC,
     data_path_RC,
     data_path_TC=None,
-    sample_type_1="Col",
-    sample_type_2="Rosa",
-    sample_type_3="Tigre",
+    sample_type_CC="Col",
+    sample_type_TC="Rosa",
+    sample_type_RC="Tigre",
 ):
+    """
+    Merge the 3 locus (CC,TC,RC) according to the sample info and
+    convert to a wide table
+
+    data_path_CC:
+        Path to CC locus root dir that contains all sample sub-folder,
+        e.g. path/to/results_read_cutoff_3
+    sample_type_CC
+    """
 
     df_CC = pd.read_csv(
         f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
@@ -340,7 +359,7 @@ def merge_three_locus(
     idx = np.argsort(df_CC["sample"])
     df_CC = df_CC.iloc[idx]
     df_CC["sample_id"] = np.arange(len(df_CC))
-    df_CC["Type"] = sample_type_1
+    df_CC["Type"] = sample_type_CC
     df_RC = pd.read_csv(
         f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
     ).sort_values("sample")
@@ -348,7 +367,7 @@ def merge_three_locus(
     idx = np.argsort(df_RC["sample"])
     df_RC = df_RC.iloc[idx]
     df_RC["sample_id"] = np.arange(len(df_RC))
-    df_RC["Type"] = sample_type_2
+    df_RC["Type"] = sample_type_TC
 
     x = "total_alleles"
     df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
@@ -365,7 +384,7 @@ def merge_three_locus(
         idx = np.argsort(df_TC["sample"])
         df_TC = df_TC.iloc[idx]
         df_TC["sample_id"] = np.arange(len(df_TC))
-        df_TC["Type"] = sample_type_3
+        df_TC["Type"] = sample_type_RC
 
         x = "total_alleles"
         df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
@@ -388,133 +407,3 @@ def merge_three_locus(
         columns={"sample_x": "CC", "sample_y": "TC", "sample": "RC"}
     )
     return df_all, df_sample_association
-
-
-def generate_allele_info_across_experiments(
-    target_data_list,
-    read_cutoff=3,
-    root_path="/Users/shouwenwang/Dropbox (HMS)/shared_folder_with_Li/DATA/CARLIN",
-):
-    """
-    Merge a given set of experiments at given read_cutoff.
-
-    This is an operation spanning multiple different experiments
-
-    target_data_list is a list of data name relative to root_dir
-    An example:
-    target_data_list=[
-       '20220306_bulk_tissues/TC_DNA',
-        '20220306_bulk_tissues/TC_RNA',
-       '20220430_CC_TC_RC/TC']
-    """
-    df_list = []
-    for sample in target_data_list:
-        data_path = f"{root_path}/{sample}"
-        with open(f"{data_path}/config.yaml", "r") as stream:
-            file = yaml.safe_load(stream)
-            SampleList = file["SampleList"]
-            read_cutoff_override = file["read_cutoff_override"]
-
-        for x in read_cutoff_override:
-            if x == read_cutoff:
-                print(f"---{sample}: cutoff: {x}")
-                for sample_temp in SampleList:
-
-                    input_dir = f"{data_path}/CARLIN/results_cutoff_override_{x}"
-
-                    df_allele = load_allele_frequency_statistics(
-                        input_dir, [sample_temp]
-                    )
-                    df_allele["sample"] = sample_temp
-                    df_list.append(df_allele)
-
-    df_merge = pd.concat(df_list, ignore_index=True)
-    map_dict = {}
-    for x in sorted(set(df_merge["sample"])):
-        mouse = "LL" + x.split("LL")[1][:3]
-        embryo_id = [f"E{j}" for j in range(20)]
-        final_id = mouse
-        for y in embryo_id:
-            if y in x:
-                final_id = final_id + "_" + y
-                break
-        # print(x, ":", final_id)
-        map_dict[x] = final_id
-
-    df_merge["sample_id"] = [map_dict[x] for x in list(df_merge["sample"])]
-
-    df_group = (
-        df_merge.groupby("allele")
-        .agg(
-            UMI_count=("UMI_count", "sum"),
-            sample_count=("sample_id", lambda x: len(set(x))),
-            sample_id=("sample_id", lambda x: set(x)),
-        )
-        .reset_index()
-    )
-
-    ## plot
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ax = sns.histplot(data=df_group, x="UMI_count", log_scale=True)
-    plt.yscale("log")
-    singleton_fraction = np.sum(df_group["UMI_count"] == 1) / len(df_group)
-    ax.set_title(f"Singleton frac.: {singleton_fraction:.3f}")
-    ax.set_ylabel("Allele histogram")
-    ax.set_xlabel("Observed frequency (UMI count)")
-
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ax = sns.histplot(data=df_group, x="sample_count", log_scale=True)
-    plt.yscale("log")
-    single_fraction = np.sum(df_group["sample_count"] == 1) / len(df_group)
-    ax.set_title(f"Single sample frac.: {single_fraction:.3f}")
-    ax.set_ylabel("Allele histogram")
-    ax.set_xlabel("Occurence across samples")
-
-    df_ref = df_group.rename(columns={"UMI_count": "expected_count"}).assign(
-        expected_frequency=lambda x: x["expected_count"] / x["expected_count"].sum()
-    )
-    df_ref = df_ref.sort_values(
-        "expected_count", ascending=False
-    )  # .filter(["allele","expected_frequency",'sample_count'])
-    return df_merge, df_ref, map_dict
-
-
-# def read_quality_checks(
-#     path_to_fastq, UMI_length, primer3_length=20, primer5_length=20
-# ):
-
-#     f = open(path_to_fastq, "r")
-#     data = f.readlines()
-#     seq = []
-#     for j in range(int(len(data) / 4)):
-#         seq.append(data[4 * j + 1].strip("\n"))
-
-#     df = pd.DataFrame({"seq": seq})
-#     df["UMI"] = df["seq"].apply(lambda x: x[:UMI_length])
-#     df["3primer"] = df["seq"].apply(
-#         lambda x: x[UMI_length : (UMI_length + primer3_length)]
-#     )
-#     df["CARLIN"] = df["seq"].apply(
-#         lambda x: x[(UMI_length + primer3_length) : -primer5_length]
-#     )
-#     df["5primer"] = df["seq"].apply(lambda x: x[-primer5_length:])
-
-#     df_temp = (
-#         df.groupby("3primer")
-#         .agg({"3primer": "count"})
-#         .rename(columns={"3primer": "3primer_count"})
-#     )
-#     df_3 = df_temp.sort_values("3primer_count").reset_index()
-#     primer_3_fraction = df_3["3primer_count"].max() / df_3["3primer_count"].sum()
-
-#     df_temp = (
-#         df.groupby("5primer")
-#         .agg({"5primer": "count"})
-#         .rename(columns={"5primer": "5primer_count"})
-#     )
-#     df_5 = df_temp.sort_values("5primer_count").reset_index()
-#     primer_5_fraction = df_5["5primer_count"].max() / df_5["5primer_count"].sum()
-
-#     print(f"Top_1 primer_3 fraction: {primer_3_fraction}")
-#     print(f"Top_1 primer_5 fraction: {primer_5_fraction}")
-#     return df, df_3, df_5
