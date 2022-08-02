@@ -890,52 +890,7 @@ def plot_deletion_statistics(df):
 def three_locus_comparison_plots(
     df_all,
     sample_key,
-    QC_metric=[
-        "tot_fastq_N",
-        "valid_5_primer (read_frac)",
-        "valid_3_primer (read_frac)",
-        "valid_2_seq (read_frac)",
-        "valid_read_structure (read_frac)",
-        "valid_lines (read_frac)",
-        "common_UMIs (read_frac)",
-        "consensus_calling_fraction",
-        "UMI_per_cell",
-        "cell_number",
-        "Mean_read_per_edited_UMI",
-        "UMI_per_clone",
-    ],
-    QC_x_label=[
-        "Total fastq reads",
-        "valid_5_primer (read_frac)",
-        "valid_3_primer (read_frac)",
-        "valid_2_seq (read_frac)",
-        "Read fraction (valid structure)",
-        "Read fraction (valid reads)",
-        "Read fraction (common UMI)",
-        "Read frac. (allele calling)",
-        "UMI per cell",
-        "Cell number",
-        "Mean reads per edited UMI",
-        "UMI per clone",
-    ],
-    performance_metric=[
-        "edit_UMI_fraction",
-        "total_alleles",
-        "singleton",
-        "singleton_fraction",
-        "total_alleles_norm_fraction",
-        "singleton_norm_fraction",
-        "Allele output per reads (normalized)",
-    ],
-    performance_x_label=[
-        "Edited cell fraction (edited UMI fraction)",
-        "Total allele number",
-        "Singleton number",
-        "Singleton fraction",
-        "Percent of alleles within a locus",
-        "Percent of singleton within a locus",
-        "Allele output per reads (normalized)",
-    ],
+    tag_name="UMI",
 ):
     """
     Comparing CC,TC,RC profiling, for both QC, and
@@ -945,9 +900,57 @@ def three_locus_comparison_plots(
     performance_metric and performance_x_label has one-to-one correspondence
     """
 
+    QC_metric = [
+        "tot_fastq_N",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
+        "valid_read_structure (read_frac)",
+        "valid_lines (read_frac)",
+        f"common_{tag_name}s (read_frac)",
+        "consensus_calling_fraction",
+        f"{tag_name}_per_cell",
+        "cell_number",
+        "Mean_read_per_edited_UMI",
+        f"{tag_name}_per_clone",
+    ]
+    QC_x_label = [
+        "Total fastq reads",
+        "valid_5_primer (read_frac)",
+        "valid_3_primer (read_frac)",
+        "valid_2_seq (read_frac)",
+        "Read fraction (valid structure)",
+        "Read fraction (valid reads)",
+        f"Read fraction (common {tag_name})",
+        "Read frac. (allele calling)",
+        f"{tag_name} per cell",
+        "Cell number",
+        "Mean reads per edited UMI",
+        f"{tag_name} per clone",
+    ]
+    performance_metric = [
+        f"edit_{tag_name}_fraction",
+        "total_alleles",
+        "singleton",
+        "singleton_fraction",
+        "total_alleles_norm_fraction",
+        "singleton_norm_fraction",
+        "Allele output per reads (normalized)",
+    ]
+    performance_x_label = [
+        f"Edited cell fraction (edited {tag_name} fraction)",
+        "Total allele number",
+        "Singleton number",
+        "Singleton fraction",
+        "Percent of alleles within a locus",
+        "Percent of singleton within a locus",
+        "Allele output per reads (normalized)",
+    ]
+
     df_all["singleton_fraction"] = df_all["singleton"] / df_all["total_alleles"]
     df_all["consensus_calling_fraction"] = (
-        df_all["called_UMIs_total (read_frac)"] / df_all["common_UMIs (read_frac)"]
+        df_all[f"called_{tag_name}s_total (read_frac)"]
+        / df_all[f"common_{tag_name}s (read_frac)"]
     )
 
     temp = df_all["total_alleles"] / (
@@ -956,7 +959,7 @@ def three_locus_comparison_plots(
     temp = temp / np.sum(temp)
     df_all["Allele output per reads (normalized)"] = temp
 
-    df_all["UMI_per_clone"] = df_all["UMI_called"] / df_all["total_alleles"]
+    df_all[f"{tag_name}_per_clone"] = df_all["UMI_called"] / df_all["total_alleles"]
 
     for j, qc in enumerate(QC_metric):
         if qc in df_all.columns:
