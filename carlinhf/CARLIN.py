@@ -101,7 +101,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
     """
     Load raw fastq files. This function will depend on what protocol is used.
     """
-    supported_protocol = ["scLimeCat"]
+    supported_protocol = ["scLimeCat", "sc10xV3"]
     if not (protocol in supported_protocol):
         raise ValueError(f"Only support protocols: {supported_protocol}")
 
@@ -121,6 +121,24 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
         df_seq["library"] = sample
         df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
         df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[8:16])
+        df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
+        df_seq["clone_id"] = df_seq["Seq"]
+    elif protocol == "sc10xV3":
+        seq_list = []
+        with gzip.open(f"{data_path}/{sample}_L001_R2_001.fastq.gz", "rt") as handle:
+            for record in SeqIO.parse(handle, "fastq"):
+                seq_list.append(str(record.seq))
+
+        tag_list = []
+        with gzip.open(f"{data_path}/{sample}_L001_R1_001.fastq.gz", "rt") as handle:
+            for record in SeqIO.parse(handle, "fastq"):
+                tag_list.append(str(record.seq))
+
+        df_seq = pd.DataFrame({"Tag": tag_list, "Seq": seq_list})
+        df_seq["cell_bc"] = df_seq["Tag"].apply(lambda x: x[:16])
+        df_seq["library"] = sample
+        df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
+        df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[16:28])
         df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
         df_seq["clone_id"] = df_seq["Seq"]
 

@@ -302,6 +302,47 @@ def load_and_annotate_sc_CARLIN_data(
     return df_sc_data, df_clone_fate, df_fate_matrix
 
 
+def merge_scCARLIN_to_bulk_CARLIN(
+    df_sc_data,
+    bulk_data_path,
+    locus="CC",
+    BC_max_sample_count: int = 6,
+    BC_max_freq: float = 10 ** (-4),
+):
+    """
+    Convert the single-cell CARLIN data to bulk like data, and
+    merge it with the corresponding bulk dataset to perform bulk-like
+    cell coupling analysis
+    """
+    sp_idx = df_sc_data["allele"].apply(lambda x: "_unmapped" in x)
+    df_sc_data.loc[sp_idx, "allele"] = df_sc_data[sp_idx]["clone_id"]
+    df_sc_bulk = (
+        df_sc_data.groupby(["allele", "sample"])
+        .agg(
+            UMI_count=("cell_id", lambda x: len(set(x))),
+            expected_frequency=("expected_frequency", "mean"),
+            sample_count=("sample_count", "mean"),
+        )
+        .reset_index()
+    )
+    df_sc_bulk["source"] = "single-cell"
+
+    df_merge_tmp = (
+        pd.read_csv(f"{bulk_data_path}/merge_all/df_allele_all.csv")
+        .filter(["allele", "sample", "UMI_count", "expected_frequency", "sample_count"])
+        .fillna(0)
+    )
+    df_merge_tmp["allele"] = f"{locus}_" + df_merge_tmp["allele"]
+    df_merge_tmp["source"] = "bulk"
+
+    df_merge = pd.concat([df_sc_bulk, df_merge_tmp], ignore_index=True)
+    df_merge = df_merge[
+        (df_merge["expected_frequency"] <= BC_max_freq)
+        & (df_merge["sample_count"] <= BC_max_sample_count)
+    ]
+    return df_merge
+
+
 #############################
 
 # The rest are no longer used?

@@ -1001,6 +1001,210 @@ def three_locus_comparison_plots(
             print(f"{y} not found in df_all")
 
 
+def analyze_cell_coupling_core(
+    df_allele,
+    selected_fates: list = None,
+    short_names: list = None,
+    remove_single_lineage_clone=False,
+    plot_sample_number=True,
+    plot_barcodes_binary=True,
+    plot_barcodes_normalize=True,
+    plot_cell_count=True,
+    plot_hierarchy=True,
+    plot_pie=False,
+    plot_correlation=True,
+    order_map=False,
+    included_fates_N=2,
+    time_info=None,
+):
+    """
+    Given adata, analyze cell coupling in full.
+    """
+
+    adata_orig = lineage.generate_adata_sample_by_allele(
+        df_allele, count_value_key="UMI_count", use_UMI=True
+    )
+
+    # a temporary fix for time_info
+    if (short_names is not None) & (time_info is None):
+        time_info = np.array(["HSC" in x for x in short_names]).astype(int).astype(str)
+
+    if plot_sample_number:
+        # sample number histogram
+        sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
+        fig, ax = plt.subplots()
+        plt.hist(sample_num_per_clone)
+        # plt.yscale('log')
+        plt.xlabel("Number of samples per clone")
+        plt.ylabel("Histogram")
+
+    # barcode heatmap
+    adata_orig.uns["data_des"] = ["coarse"]
+    # cs.settings.set_figure_params(format="png", figsize=[4, 4], dpi=75, fontsize=15)
+    coarse_X_clone, selected_fates = cs.tl.coarse_grain_clone_over_cell_clusters(
+        adata_orig, selected_fates=selected_fates
+    )
+
+    if remove_single_lineage_clone:
+        print("Warning: Remove single lineage clones")
+        print("coarse_X_clone shape:", coarse_X_clone.shape)
+        coarse_X_clone = coarse_X_clone[:, (coarse_X_clone > 0).sum(0) > 1]
+
+    adata = lineage.generate_adata_from_X_clone(
+        ssp.csr_matrix(coarse_X_clone), state_info=short_names, time_info=time_info
+    )
+
+    if plot_barcodes_normalize:
+        cs.pl.barcode_heatmap(
+            adata,
+            normalize=True,
+            selected_fates=short_names,
+            order_map_x=False,
+            order_map_y=False,
+            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][0],
+        )
+
+        if type(included_fates_N) is int:
+            lineage.conditional_heatmap(
+                coarse_X_clone,
+                short_names,
+                time_info=time_info,
+                mode="or",
+                normalize=True,
+                included_fates=short_names[:included_fates_N],
+                fig_height=1 * plt.rcParams["figure.figsize"][0],
+                fig_width=plt.rcParams["figure.figsize"][0],
+            )
+        elif type(included_fates_N) is list:
+            for j in range(len(included_fates_N)):
+                lineage.conditional_heatmap(
+                    coarse_X_clone,
+                    short_names,
+                    normalize=True,
+                    time_info=time_info,
+                    mode="or",
+                    included_fates=short_names[
+                        included_fates_N[j] : included_fates_N[j] + 1
+                    ],
+                    fig_height=1 * plt.rcParams["figure.figsize"][0],
+                    fig_width=plt.rcParams["figure.figsize"][0],
+                )
+
+    if plot_barcodes_binary:
+        cs.pl.barcode_heatmap(
+            adata,
+            binarize=True,
+            selected_fates=short_names,
+            order_map_x=False,
+            order_map_y=False,
+            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][0],
+        )
+
+        if type(included_fates_N) is int:
+            lineage.conditional_heatmap(
+                coarse_X_clone,
+                short_names,
+                time_info=time_info,
+                mode="or",
+                binarize=True,
+                included_fates=short_names[:included_fates_N],
+                fig_height=1 * plt.rcParams["figure.figsize"][0],
+                fig_width=plt.rcParams["figure.figsize"][0],
+            )
+        elif type(included_fates_N) is list:
+            for j in range(len(included_fates_N)):
+                lineage.conditional_heatmap(
+                    coarse_X_clone,
+                    short_names,
+                    time_info=time_info,
+                    binarize=True,
+                    mode="or",
+                    included_fates=short_names[
+                        included_fates_N[j] : included_fates_N[j] + 1
+                    ],
+                    fig_height=1 * plt.rcParams["figure.figsize"][0],
+                    fig_width=plt.rcParams["figure.figsize"][0],
+                )
+
+    adata.obs_names = short_names
+    adata.var_names = adata_orig.var_names
+    fate_names = short_names
+
+    if plot_cell_count:
+        # cell count
+        fig, ax = plt.subplots(figsize=(10, 4))
+        plt.bar(
+            np.arange(coarse_X_clone.shape[0]),
+            (coarse_X_clone > 0).sum(1),
+            tick_label=fate_names,
+        )
+        plt.xticks(rotation="vertical")
+        plt.ylabel("Clone number")
+
+    if plot_hierarchy:
+        # hierarchy
+        # cs.tl.fate_hierarchy(adata, source="X_clone", method="SW")
+        # cs.pl.fate_hierarchy(adata, source="X_clone")
+
+        # fate coupling
+        cs.tl.fate_coupling(
+            adata, method="SW", source="X_clone", selected_fates=short_names
+        )
+        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+        cs.pl.fate_coupling(
+            adata,
+            source="X_clone",
+            vmin=0,
+            order_map_x=order_map,
+            order_map_y=order_map,
+            color_bar_label="Fate coupling (SW)",
+        )
+
+        # fate coupling
+        cs.tl.fate_coupling(
+            adata, method="Jaccard", source="X_clone", selected_fates=short_names
+        )
+        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+        cs.pl.fate_coupling(
+            adata,
+            source="X_clone",
+            vmin=0,
+            color_bar_label="Fate coupling (Jaccard)",
+            order_map_x=order_map,
+            order_map_y=order_map,
+        )
+
+    if plot_correlation:
+        coarse_X_clone = cs.tl.get_normalized_coarse_X_clone(
+            adata, short_names, fate_normalize_source="X_clone"
+        ).to_numpy()
+
+        ax = cs.pl.heatmap(
+            np.corrcoef(coarse_X_clone),
+            order_map_x=order_map,
+            order_map_y=order_map,
+            x_ticks=short_names,
+            y_ticks=short_names,
+            color_bar_label="Pearson correlation",
+            color_map=plt.cm.coolwarm,
+            vmax=0.2,
+            vmin=-0.2,
+            fig_height=plt.rcParams["figure.figsize"][0],
+            fig_width=1.2 * plt.rcParams["figure.figsize"][0],
+        )
+        ax.set_title("Pan-celltype correlation")
+
+    if plot_pie:
+        fig, ax = plt.subplots(figsize=(5, 5))
+        plotting.plot_pie_chart(
+            coarse_X_clone, fate_names=short_names, include_fate=short_names[0]
+        )
+
+    return adata
+
+
 def analyze_cell_coupling(
     data_path,
     SampleList,
@@ -1101,138 +1305,20 @@ def analyze_cell_coupling(
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
-    adata_orig = lineage.generate_adata_sample_by_allele(
-        df_HQ, count_value_key="UMI_count", use_UMI=True
+    adata = analyze_cell_coupling_core(
+        df_HQ,
+        selected_fates,
+        short_names,
+        remove_single_lineage_clone=remove_single_lineage_clone,
+        plot_sample_number=plot_sample_number,
+        plot_barcodes_binary=plot_barcodes_binary,
+        plot_barcodes_normalize=plot_barcodes_normalize,
+        plot_cell_count=plot_cell_count,
+        plot_hierarchy=plot_hierarchy,
+        plot_pie=plot_pie,
+        plot_correlation=plot_correlation,
+        order_map=order_map,
     )
-
-    if plot_sample_number:
-        # sample number histogram
-        sample_num_per_clone = (adata_orig.obsm["X_clone"] > 0).sum(0).A.flatten()
-        fig, ax = plt.subplots()
-        plt.hist(sample_num_per_clone)
-        # plt.yscale('log')
-        plt.xlabel("Number of samples per clone")
-        plt.ylabel("Histogram")
-
-    # barcode heatmap
-    adata_orig.uns["data_des"] = ["coarse"]
-    # cs.settings.set_figure_params(format="png", figsize=[4, 4], dpi=75, fontsize=15)
-    coarse_X_clone, selected_fates = cs.tl.coarse_grain_clone_over_cell_clusters(
-        adata_orig, selected_fates=selected_fates
-    )
-
-    if remove_single_lineage_clone:
-        print("Warning: Remove single lineage clones")
-        print("coarse_X_clone shape:", coarse_X_clone.shape)
-        coarse_X_clone = coarse_X_clone[:, (coarse_X_clone > 0).sum(0) > 1]
-
-    adata = lineage.generate_adata_from_X_clone(
-        ssp.csr_matrix(coarse_X_clone), state_info=short_names
-    )
-
-    if plot_barcodes_normalize:
-        cs.pl.barcode_heatmap(
-            adata,
-            normalize=True,
-            selected_fates=short_names,
-            order_map_x=False,
-            order_map_y=False,
-            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
-            fig_width=plt.rcParams["figure.figsize"][0],
-        )
-    if plot_barcodes_binary:
-        cs.pl.barcode_heatmap(
-            adata,
-            binarize=True,
-            selected_fates=short_names,
-            order_map_x=False,
-            order_map_y=False,
-            fig_height=1.3 * plt.rcParams["figure.figsize"][0],
-            fig_width=plt.rcParams["figure.figsize"][0],
-        )
-        lineage.conditional_heatmap(
-            coarse_X_clone,
-            short_names,
-            mode="or",
-            included_fates=short_names[:3],
-            fig_height=1 * plt.rcParams["figure.figsize"][0],
-            fig_width=plt.rcParams["figure.figsize"][0],
-        )
-
-    adata.obs_names = short_names
-    adata.var_names = adata_orig.var_names
-    fate_names = short_names
-
-    if plot_cell_count:
-        # cell count
-        fig, ax = plt.subplots(figsize=(10, 4))
-        plt.bar(
-            np.arange(coarse_X_clone.shape[0]),
-            (coarse_X_clone > 0).sum(1),
-            tick_label=fate_names,
-        )
-        plt.xticks(rotation="vertical")
-        plt.ylabel("Clone number")
-
-    if plot_hierarchy:
-        # hierarchy
-        # cs.tl.fate_hierarchy(adata, source="X_clone", method="SW")
-        # cs.pl.fate_hierarchy(adata, source="X_clone")
-
-        # fate coupling
-        cs.tl.fate_coupling(
-            adata, method="SW", source="X_clone", selected_fates=short_names
-        )
-        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
-        cs.pl.fate_coupling(
-            adata,
-            source="X_clone",
-            vmin=0,
-            order_map_x=order_map,
-            order_map_y=order_map,
-            color_bar_label="Fate coupling (SW)",
-        )
-
-        # fate coupling
-        cs.tl.fate_coupling(
-            adata, method="Jaccard", source="X_clone", selected_fates=short_names
-        )
-        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
-        cs.pl.fate_coupling(
-            adata,
-            source="X_clone",
-            vmin=0,
-            color_bar_label="Fate coupling (Jaccard)",
-            order_map_x=order_map,
-            order_map_y=order_map,
-        )
-
-    if plot_correlation:
-        coarse_X_clone = cs.tl.get_normalized_coarse_X_clone(
-            adata, short_names
-        ).to_numpy()
-
-        ax = cs.pl.heatmap(
-            np.corrcoef(coarse_X_clone),
-            order_map_x=order_map,
-            order_map_y=order_map,
-            x_ticks=short_names,
-            y_ticks=short_names,
-            color_bar_label="Pearson correlation",
-            color_map=plt.cm.coolwarm,
-            vmax=0.2,
-            vmin=-0.2,
-            fig_height=plt.rcParams["figure.figsize"][0],
-            fig_width=1.2 * plt.rcParams["figure.figsize"][0],
-        )
-        ax.set_title("Pan-celltype correlation")
-
-    if plot_pie:
-        fig, ax = plt.subplots(figsize=(5, 5))
-        plotting.plot_pie_chart(
-            coarse_X_clone, fate_names=short_names, include_fate=short_names[0]
-        )
-
     return adata, df_all
 
 

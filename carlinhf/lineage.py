@@ -540,11 +540,12 @@ def evaluate_coupling_matrix(
 def conditional_heatmap(
     coarse_X_clone,
     fate_names: list,
+    time_info=None,
     included_fates: list = None,
     excluded_fates: list = None,
-    binarize=True,
+    binarize=False,
+    normalize=False,
     mode="and",
-    plot=True,
     **kwargs,
 ):
     """
@@ -577,27 +578,44 @@ def conditional_heatmap(
                 valid_clone_idx_tmp = coarse_X_clone[fate_names == x_name].sum(0) > 0
                 valid_clone_idx = valid_clone_idx | ~valid_clone_idx_tmp
 
-    new_matrix = coarse_X_clone[:, valid_clone_idx]
-    X_count, norm_X_count = get_fate_count_coupling(new_matrix)
-    new_matrix = cs.pl.custom_hierachical_ordering(
-        np.arange(new_matrix.shape[0]), new_matrix
+    adata = generate_adata_from_X_clone(
+        ssp.csr_matrix(coarse_X_clone[:, valid_clone_idx]),
+        state_info=fate_names,
+        time_info=time_info,
     )
 
-    if binarize:
-        new_matrix = (new_matrix > 0).astype(int)
+    cs.pl.barcode_heatmap(
+        adata,
+        normalize=normalize,
+        binarize=binarize,
+        selected_fates=fate_names,
+        order_map_x=False,
+        order_map_y=False,
+        fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+        fig_width=plt.rcParams["figure.figsize"][0],
+    )
+    X_count = adata.uns["barcode_heatmap"]["coarse_X_clone"]
+    # new_matrix = coarse_X_clone[:, valid_clone_idx]
+    # X_count, norm_X_count = get_fate_count_coupling(new_matrix)
+    # new_matrix = cs.pl.custom_hierachical_ordering(
+    #     np.arange(new_matrix.shape[0]), new_matrix
+    # )
 
-    for j, x in enumerate(fate_names):
-        print(f"Clone # ({x}): {(new_matrix>0).sum(1)[j]:.2f}")
-    if plot:
-        cs.pl.heatmap(
-            new_matrix.T,
-            order_map_x=False,
-            order_map_y=False,
-            x_ticks=fate_names,
-            **kwargs,
-        )
-        plt.title(f"{np.sum(valid_clone_idx)} clones")
-    return X_count, norm_X_count
+    # if binarize:
+    #     new_matrix = (new_matrix > 0).astype(int)
+
+    # for j, x in enumerate(fate_names):
+    #     print(f"Clone # ({x}): {(new_matrix>0).sum(1)[j]:.2f}")
+    # if plot:
+    #     cs.pl.heatmap(
+    #         new_matrix.T,
+    #         order_map_x=False,
+    #         order_map_y=False,
+    #         x_ticks=fate_names,
+    #         **kwargs,
+    #     )
+    #     plt.title(f"{np.sum(valid_clone_idx)} clones")
+    return X_count
 
 
 ##########################
@@ -607,13 +625,13 @@ def conditional_heatmap(
 ###########################
 
 
-def generate_adata_from_X_clone(X_clone, state_info=None):
+def generate_adata_from_X_clone(X_clone, state_info=None, time_info=None):
     """
     Convert X_clone matrix to adata, and also add it to adata.obsm['X_clone'].
     You can run cospar on it directly.
     """
+
     adata_orig = sc.AnnData(X_clone)
-    adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
     adata_orig.obsm["X_clone"] = X_clone
     adata_orig.uns["data_des"] = ["hi"]
     if state_info is None:
@@ -622,6 +640,11 @@ def generate_adata_from_X_clone(X_clone, state_info=None):
         )
     else:
         adata_orig.obs["state_info"] = pd.Categorical(state_info)
+
+    if time_info is None:
+        adata_orig.obs["time_info"] = ["0"] * X_clone.shape[0]
+    else:
+        adata_orig.obs["time_info"] = pd.Categorical(time_info)
     return adata_orig
 
 
