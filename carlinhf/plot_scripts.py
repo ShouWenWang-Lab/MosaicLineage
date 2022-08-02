@@ -911,7 +911,7 @@ def three_locus_comparison_plots(
         "consensus_calling_fraction",
         f"{tag_name}_per_cell",
         "cell_number",
-        "Mean_read_per_edited_UMI",
+        f"Mean_read_per_edited_{tag_name}",
         f"{tag_name}_per_clone",
     ]
     QC_x_label = [
@@ -925,7 +925,7 @@ def three_locus_comparison_plots(
         "Read frac. (allele calling)",
         f"{tag_name} per cell",
         "Cell number",
-        "Mean reads per edited UMI",
+        f"Mean reads per edited {tag_name}",
         f"{tag_name} per clone",
     ]
     performance_metric = [
@@ -959,7 +959,9 @@ def three_locus_comparison_plots(
     temp = temp / np.sum(temp)
     df_all["Allele output per reads (normalized)"] = temp
 
-    df_all[f"{tag_name}_per_clone"] = df_all["UMI_called"] / df_all["total_alleles"]
+    df_all[f"{tag_name}_per_clone"] = (
+        df_all[f"{tag_name}_called"] / df_all["total_alleles"]
+    )
 
     for j, qc in enumerate(QC_metric):
         if qc in df_all.columns:
@@ -1405,7 +1407,11 @@ def clonal_analysis(
         )
 
 
-def visualize_sc_CARLIN_data(df_sc_data):
+def visualize_sc_CARLIN_data(df_sc_data_input):
+
+    df_sc_data=df_sc_data_input.copy()
+    locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa"}
+    df_sc_data['locus']=df_sc_data['locus'].map(locus_map)
     df_plot = (
         df_sc_data.groupby(["locus", "library"])
         .agg(
@@ -1416,15 +1422,15 @@ def visualize_sc_CARLIN_data(df_sc_data):
     )
     df_plot["library"] = df_plot["library"].apply(lambda x: x.split("_")[0][:-3])
     fig, ax = plt.subplots()
-    sns.scatterplot(data=df_plot, x="cell_number", y="clone_number", hue="locus")
+    sns.scatterplot(data=df_plot, x="cell_number", y="clone_number", hue="locus", hue_order=["Col", "Tigre", "Rosa"])
 
     fig, ax = plt.subplots()
-    sns.barplot(data=df_plot, x="library", y="clone_number", hue="locus")
+    sns.barplot(data=df_plot, x="library", y="clone_number", hue="locus",hue_order=["Col", "Tigre", "Rosa"])
     plt.xticks(rotation=90)
     plt.ylim([0, 50])
 
     fig, ax = plt.subplots()
-    sns.barplot(data=df_plot, x="library", y="cell_number", hue="locus")
+    sns.barplot(data=df_plot, x="library", y="cell_number", hue="locus",hue_order=["Col", "Tigre", "Rosa"])
     plt.xticks(rotation=90)
     plt.ylim([0, 90])
 
@@ -1436,6 +1442,7 @@ def visualize_sc_CARLIN_data(df_sc_data):
         x="read",
         y="CARLIN_length",
         hue="locus",
+        hue_order=["Col", "Tigre", "Rosa"]
     )
     plt.xscale("log")
 
@@ -1470,9 +1477,9 @@ def visualize_sc_CARLIN_data(df_sc_data):
 
     fig, ax = plt.subplots()
     plotting.plot_venn3(
-        df_sc_data[df_sc_data.locus == "CC"]["RNA_id"],
-        df_sc_data[df_sc_data.locus == "TC"]["RNA_id"],
-        df_sc_data[df_sc_data.locus == "RC"]["RNA_id"],
-        labels=["CC", "TC", "RC"],
+        df_sc_data[df_sc_data.locus == "Col"]["RNA_id"],
+        df_sc_data[df_sc_data.locus == "Rosa"]["RNA_id"],
+        df_sc_data[df_sc_data.locus == "Tigre"]["RNA_id"],
+        labels=["Col", "Rosa","Tigre"],
     )
     plt.title("Cell number")
