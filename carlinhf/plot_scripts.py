@@ -1007,32 +1007,32 @@ def three_locus_comparison_plots(
 
 
 def analyze_cell_coupling_core(
-    df_allele,
+    adata_orig,
     selected_fates: list = None,
     short_names: list = None,
     remove_single_lineage_clone=False,
     plot_sample_number=True,
     plot_barcodes_binary=True,
     plot_barcodes_normalize=True,
+    plot_restricted=True,
     plot_cell_count=True,
     plot_hierarchy=True,
     plot_pie=False,
     plot_correlation=True,
     order_map=False,
-    included_fates_N=2,
+    included_fates_N=[0],
     time_info=None,
 ):
     """
     Given adata, analyze cell coupling in full.
     """
 
-    adata_orig = lineage.generate_adata_sample_by_allele(
-        df_allele, count_value_key="UMI_count", use_UMI=True
-    )
-
     # a temporary fix for time_info
     if (short_names is not None) & (time_info is None):
         time_info = np.array(["HSC" in x for x in short_names]).astype(int).astype(str)
+
+    if short_names is None:
+        short_names = selected_fates
 
     if plot_sample_number:
         # sample number histogram
@@ -1070,32 +1070,6 @@ def analyze_cell_coupling_core(
             fig_width=plt.rcParams["figure.figsize"][0],
         )
 
-        if type(included_fates_N) is int:
-            lineage.conditional_heatmap(
-                coarse_X_clone,
-                short_names,
-                time_info=time_info,
-                mode="or",
-                normalize=True,
-                included_fates=short_names[:included_fates_N],
-                fig_height=1 * plt.rcParams["figure.figsize"][0],
-                fig_width=plt.rcParams["figure.figsize"][0],
-            )
-        elif type(included_fates_N) is list:
-            for j in range(len(included_fates_N)):
-                lineage.conditional_heatmap(
-                    coarse_X_clone,
-                    short_names,
-                    normalize=True,
-                    time_info=time_info,
-                    mode="or",
-                    included_fates=short_names[
-                        included_fates_N[j] : included_fates_N[j] + 1
-                    ],
-                    fig_height=1 * plt.rcParams["figure.figsize"][0],
-                    fig_width=plt.rcParams["figure.figsize"][0],
-                )
-
     if plot_barcodes_binary:
         cs.pl.barcode_heatmap(
             adata,
@@ -1107,31 +1081,36 @@ def analyze_cell_coupling_core(
             fig_width=plt.rcParams["figure.figsize"][0],
         )
 
+    if plot_restricted:
         if type(included_fates_N) is int:
+            included_fates_N = [included_fates_N]
+
+        for j in range(len(included_fates_N)):
             lineage.conditional_heatmap(
                 coarse_X_clone,
                 short_names,
+                normalize=True,
                 time_info=time_info,
                 mode="or",
-                binarize=True,
-                included_fates=short_names[:included_fates_N],
+                included_fates=short_names[
+                    included_fates_N[j] : included_fates_N[j] + 1
+                ],
                 fig_height=1 * plt.rcParams["figure.figsize"][0],
                 fig_width=plt.rcParams["figure.figsize"][0],
             )
-        elif type(included_fates_N) is list:
-            for j in range(len(included_fates_N)):
-                lineage.conditional_heatmap(
-                    coarse_X_clone,
-                    short_names,
-                    time_info=time_info,
-                    binarize=True,
-                    mode="or",
-                    included_fates=short_names[
-                        included_fates_N[j] : included_fates_N[j] + 1
-                    ],
-                    fig_height=1 * plt.rcParams["figure.figsize"][0],
-                    fig_width=plt.rcParams["figure.figsize"][0],
-                )
+
+            lineage.conditional_heatmap(
+                coarse_X_clone,
+                short_names,
+                binarize=True,
+                time_info=time_info,
+                mode="or",
+                included_fates=short_names[
+                    included_fates_N[j] : included_fates_N[j] + 1
+                ],
+                fig_height=1 * plt.rcParams["figure.figsize"][0],
+                fig_width=plt.rcParams["figure.figsize"][0],
+            )
 
     adata.obs_names = short_names
     adata.var_names = adata_orig.var_names
@@ -1225,6 +1204,7 @@ def analyze_cell_coupling(
     plot_pie=False,
     plot_correlation=True,
     order_map=False,
+    plot_restricted=True,
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1310,8 +1290,12 @@ def analyze_cell_coupling(
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
+    adata_orig = lineage.generate_adata_sample_by_allele(
+        df_HQ, count_value_key="UMI_count", use_UMI=True
+    )
+
     adata = analyze_cell_coupling_core(
-        df_HQ,
+        adata_orig,
         selected_fates,
         short_names,
         remove_single_lineage_clone=remove_single_lineage_clone,
@@ -1323,6 +1307,7 @@ def analyze_cell_coupling(
         plot_pie=plot_pie,
         plot_correlation=plot_correlation,
         order_map=order_map,
+        plot_restricted=plot_restricted,
     )
     return adata, df_all
 
@@ -1407,11 +1392,27 @@ def clonal_analysis(
         )
 
 
-def visualize_sc_CARLIN_data(df_sc_data_input):
+def visualize_sc_CARLIN_data(
+    df_sc_data_input, plot_read_CARLIN=True, plot_expected_frequency=True, point_size=5
+):
+    """
+    For CARLIN pipeline output, run the following to get appropriate input
+    ```python
+    df_merge=pd.concat([df_all_CC,df_all_TC,df_all_RC],ignore_index=True).fillna(0).query('invalid_alleles!=True')
+    df_merge['locus']=df_merge['sample'].apply(lambda x: x[-2:])
+    df_merge['CARLIN']=df_merge['locus']+'_'+df_merge['CARLIN']
+    df_merge['allele']=df_merge['locus']+'_'+df_merge['allele']
+    df_merge['library']=df_merge['sample']
 
-    df_sc_data=df_sc_data_input.copy()
+    df_merge_v1=hf.CARLIN_output_to_cell_by_barcode_long_table(df_merge).merge(df_merge,left_on='clone_id',right_on='CARLIN')
+
+    df_merge_v1=hf.add_metadata(df_merge_v1)
+    ```
+    """
+
+    df_sc_data = df_sc_data_input.copy()
     locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa"}
-    df_sc_data['locus']=df_sc_data['locus'].map(locus_map)
+    df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
     df_plot = (
         df_sc_data.groupby(["locus", "library"])
         .agg(
@@ -1421,30 +1422,57 @@ def visualize_sc_CARLIN_data(df_sc_data_input):
         .reset_index()
     )
     df_plot["library"] = df_plot["library"].apply(lambda x: x.split("_")[0][:-3])
-    fig, ax = plt.subplots()
-    sns.scatterplot(data=df_plot, x="cell_number", y="clone_number", hue="locus", hue_order=["Col", "Tigre", "Rosa"])
-
-    fig, ax = plt.subplots()
-    sns.barplot(data=df_plot, x="library", y="clone_number", hue="locus",hue_order=["Col", "Tigre", "Rosa"])
-    plt.xticks(rotation=90)
-    plt.ylim([0, 50])
-
-    fig, ax = plt.subplots()
-    sns.barplot(data=df_plot, x="library", y="cell_number", hue="locus",hue_order=["Col", "Tigre", "Rosa"])
-    plt.xticks(rotation=90)
-    plt.ylim([0, 90])
 
     fig, ax = plt.subplots()
     sns.scatterplot(
-        data=df_sc_data.filter(
-            ["clone_id", "read", "CARLIN_length", "locus"], axis=1
-        ).drop_duplicates(),
-        x="read",
-        y="CARLIN_length",
+        data=df_plot,
+        x="cell_number",
+        y="clone_number",
         hue="locus",
-        hue_order=["Col", "Tigre", "Rosa"]
+        hue_order=["Col", "Tigre", "Rosa"],
     )
-    plt.xscale("log")
+
+    fig, ax = plt.subplots()
+    sns.barplot(
+        data=df_plot,
+        x="library",
+        y="clone_number",
+        hue="locus",
+        hue_order=["Col", "Tigre", "Rosa"],
+    )
+    plt.xticks(rotation=90)
+
+    fig, ax = plt.subplots()
+    sns.barplot(
+        data=df_plot,
+        x="library",
+        y="cell_number",
+        hue="locus",
+        hue_order=["Col", "Tigre", "Rosa"],
+    )
+    plt.xticks(rotation=90)
+
+    if plot_read_CARLIN:
+        g = sns.FacetGrid(
+            df_sc_data.filter(
+                ["clone_id", "read", "CARLIN_length", "locus"], axis=1
+            ).drop_duplicates(),
+            col="locus",
+        )
+        g.map(sns.scatterplot, "read", "CARLIN_length", s=point_size)
+        plt.xscale("log")
+
+        # sns.scatterplot(
+        #     data=df_sc_data.filter(
+        #         ["clone_id", "read", "CARLIN_length", "locus"], axis=1
+        #     ).drop_duplicates(),
+        #     x="read",
+        #     y="CARLIN_length",
+        #     hue="locus",
+        #     hue_order=["Col", "Tigre", "Rosa"],
+        #     s=point_size,
+        # )
+        # plt.xscale("log")
 
     # filter to count only unique alleles
     g = sns.FacetGrid(
@@ -1456,13 +1484,13 @@ def visualize_sc_CARLIN_data(df_sc_data_input):
     g.map(sns.histplot, "sample_count")
 
     # filter to count only unique alleles
-    g = sns.FacetGrid(
-        df_sc_data.filter(
+    if plot_expected_frequency:
+        df_tmp = df_sc_data.filter(
             ["clone_id", "expected_frequency", "locus"], axis=1
-        ).drop_duplicates(),
-        col="locus",
-    )
-    g.map(sns.histplot, "expected_frequency")
+        ).drop_duplicates()
+        df_tmp["expected_frequency"] = 10 ** (-8) + df_tmp["expected_frequency"]
+        g = sns.FacetGrid(df_tmp, col="locus")
+        g.map(sns.histplot, "expected_frequency", log_scale=True)
 
     g = sns.FacetGrid(
         df_sc_data.filter(
@@ -1480,6 +1508,24 @@ def visualize_sc_CARLIN_data(df_sc_data_input):
         df_sc_data[df_sc_data.locus == "Col"]["RNA_id"],
         df_sc_data[df_sc_data.locus == "Rosa"]["RNA_id"],
         df_sc_data[df_sc_data.locus == "Tigre"]["RNA_id"],
-        labels=["Col", "Rosa","Tigre"],
+        labels=["Col", "Rosa", "Tigre"],
     )
     plt.title("Cell number")
+
+    fig, ax = plt.subplots()
+    df_clone_size = (
+        df_sc_data.groupby(["clone_id", "library"])
+        .agg(clone_size=("RNA_id", lambda x: len(set(x))))
+        .reset_index()
+    )
+    sns.histplot(data=df_clone_size, x="clone_size", log_scale=True)
+    plt.yscale("log")
+
+    fig, ax = plt.subplots()
+    df_plot = df_sc_data.groupby("RNA_id").agg(
+        allele_number=("allele", lambda x: len(set(x))),
+        allele_merge=("allele", lambda x: ",".join(list(set(x)))),
+    )
+    sns.histplot(data=df_plot, x="allele_number")
+    if np.sum(df_plot["allele_number"] >= 4) > 0:
+        return df_plot[df_plot["allele_number"] >= 4]

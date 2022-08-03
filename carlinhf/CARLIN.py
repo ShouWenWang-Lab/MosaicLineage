@@ -337,6 +337,14 @@ def CARLIN_output_to_cell_by_barcode_long_table(df_input):
     """
     Convert output from extract_CARLIN_info (a wide table)
     to a two column (cell, and clone_id) long table.
+
+    Warn: this is suitable only within a library.
+
+    A alternative method:
+    ```python
+    df_input['CB']=df_input['CB'].str.split(',')
+    df_output=df_input.explode('CB').reset_index(drop=True).rename(columns={'CB':'cell_bc','CARLIN':'clone_id'})
+    ```
     """
 
     CB_flat = []
