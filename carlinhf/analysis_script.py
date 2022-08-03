@@ -166,6 +166,21 @@ def generate_allele_info_across_experiments(
     return df_merge, df_ref, map_dict
 
 
+def add_metadata(df_sc_data, plate_map=None):
+    if "library" in df_sc_data.columns:
+        df_sc_data["sample"] = df_sc_data["library"].apply(lambda x: x.split("_")[0])
+
+    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
+    df_sc_data["plate_ID"] = df_sc_data["sample"].apply(lambda x: x[:-3])
+    if plate_map is not None:
+        df_sc_data["plate_ID"] = df_sc_data["plate_ID"].map(plate_map)
+
+    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
+    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
+    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
+    return df_sc_data
+
+
 def load_and_annotate_sc_CARLIN_data(
     sc_root_path: str,
     bulk_data_path: str,
@@ -173,9 +188,6 @@ def load_and_annotate_sc_CARLIN_data(
     plate_map: dict = None,
     locus: str = "CC",
     ref_dir: str = "/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data",
-    BC_max_sample_count: int = 6,
-    BC_max_freq: float = 10 ** (-4),
-    read_cutoff: int = 10,
     sc_data_source: str = "SW",
 ):
     """
@@ -192,7 +204,7 @@ def load_and_annotate_sc_CARLIN_data(
     Parameters
     ----------
     sc_root_path:
-        root_path to point to the config.yaml file
+        root_path to point to the sample folder, e.g. path/CARLIN/Shouwen_Method
     bulk_data_path:
         path to sample folder, e.g. path/to/read_cutoff_override_3
     sample_map: dict
@@ -203,12 +215,6 @@ def load_and_annotate_sc_CARLIN_data(
         CARLIN locus.
     ref_dir: str
         Allele bank reference directory. set to "/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data",
-    BC_max_sample_count:
-        Max number of independent samples where a CARLIN allele is detected. A higher such number implies barcode homoplasy.
-    BC_max_freq:
-        Max frequency of detection in bulk datasets. A higher frequency implies barcode homoplasy.
-    read_cutoff:
-        Minimum number of reads to support this allele
     sc_data_source:
         Data source of the bulk fate data.
 
@@ -229,25 +235,19 @@ def load_and_annotate_sc_CARLIN_data(
     if sc_data_source not in ["SW", "joint"]:
         raise ValueError("sc_data_source be in {'SW','joint'}")
 
-    print(
-        f"locus: {locus}; read cutoff: {read_cutoff}; BC_max_sample_count: {BC_max_sample_count}; BC_max_freq: {BC_max_freq}"
-    )
-
     # load all CARLIN data across samples
-    SampleList = car.get_SampleList(sc_root_path)
+    SampleList = car.get_SampleList(f"{sc_root_path}/../..")
     df_list = []
     for sample in SampleList:
         if sc_data_source == "SW":
             df_sc_tmp = pd.read_csv(
-                f"{sc_root_path}/CARLIN/Shouwen_Method/{sample}/called_barcodes_by_SW_method.csv"
+                f"{sc_root_path}/{sample}/called_barcodes_by_SW_method.csv"
             )
         else:
             print(
                 "load allele data identified with either original and new (SW) method"
             )
-            df_sc_tmp = pd.read_csv(
-                f"{sc_root_path}/CARLIN/Shouwen_Method/{sample}/df_outer_joint.csv"
-            )
+            df_sc_tmp = pd.read_csv(f"{sc_root_path}/{sample}/df_outer_joint.csv")
         df_list.append(df_sc_tmp)
     df_sc_data = pd.concat(df_list, ignore_index=True)
 
@@ -264,25 +264,9 @@ def load_and_annotate_sc_CARLIN_data(
     )
     df_sc_data = df_sc_data.merge(df_ref, on="allele", how="left").fillna(0)
 
-    df_sc_data = df_sc_data.assign(
-        HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-        & (x["expected_frequency"] <= BC_max_freq)
-    ).query("HQ==True")
-
     # annotate single-cell sample information
-    if "library" in df_sc_data.columns:
-        df_sc_data["sample"] = df_sc_data["library"].apply(lambda x: x.split("_")[0])
-
     df_sc_data["locus"] = locus
-    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
-    df_sc_data["plate_ID"] = df_sc_data["sample"].apply(lambda x: x[:-3])
-    if plate_map is not None:
-        df_sc_data["plate_ID"] = df_sc_data["plate_ID"].map(plate_map)
-
-    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
-    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
-    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
-    df_sc_data = df_sc_data[df_sc_data.read >= read_cutoff]
+    df_sc_data = add_metadata(df_sc_data, plate_map=plate_map)
 
     ## convert the bulk fate information to clone-fate table, and then merge with the sc clonal data
     ## This step needs to happen after *annotate single-cell sample information* so that
