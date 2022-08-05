@@ -933,6 +933,7 @@ def three_locus_comparison_plots(
         "total_alleles",
         "singleton",
         "singleton_fraction",
+        "CARLIN_potential_by_allel",
         "total_alleles_norm_fraction",
         "singleton_norm_fraction",
         "Allele output per reads (normalized)",
@@ -942,6 +943,7 @@ def three_locus_comparison_plots(
         "Total allele number",
         "Singleton number",
         "Singleton fraction",
+        "CARLIN potential (allel)",
         "Percent of alleles within a locus",
         "Percent of singleton within a locus",
         "Allele output per reads (normalized)",
@@ -1021,10 +1023,13 @@ def analyze_cell_coupling_core(
     plot_correlation=True,
     order_map=False,
     included_fates_N=[0],
+    included_fates_mode="only",
     time_info=None,
 ):
     """
     Given adata, analyze cell coupling in full.
+
+    ncluded_fates_mode: {'only','until'}
     """
 
     # a temporary fix for time_info
@@ -1086,15 +1091,20 @@ def analyze_cell_coupling_core(
             included_fates_N = [included_fates_N]
 
         for j in range(len(included_fates_N)):
+
+            if included_fates_mode == "only":
+                included_fates = short_names[
+                    included_fates_N[j] : included_fates_N[j] + 1
+                ]
+            else:
+                included_fates = short_names[: included_fates_N[j]]
             lineage.conditional_heatmap(
                 coarse_X_clone,
                 short_names,
                 normalize=True,
                 time_info=time_info,
                 mode="or",
-                included_fates=short_names[
-                    included_fates_N[j] : included_fates_N[j] + 1
-                ],
+                included_fates=included_fates,
                 fig_height=1 * plt.rcParams["figure.figsize"][0],
                 fig_width=plt.rcParams["figure.figsize"][0],
             )
@@ -1105,9 +1115,7 @@ def analyze_cell_coupling_core(
                 binarize=True,
                 time_info=time_info,
                 mode="or",
-                included_fates=short_names[
-                    included_fates_N[j] : included_fates_N[j] + 1
-                ],
+                included_fates=included_fates,
                 fig_height=1 * plt.rcParams["figure.figsize"][0],
                 fig_width=plt.rcParams["figure.figsize"][0],
             )
@@ -1134,9 +1142,13 @@ def analyze_cell_coupling_core(
 
         # fate coupling
         cs.tl.fate_coupling(
-            adata, method="SW", source="X_clone", selected_fates=short_names
+            adata,
+            method="SW",
+            source="X_clone",
+            normalize=True,
+            selected_fates=short_names,
         )
-        # cs.settings.set_figure_params(dpi=100, figsize=(5.5, 5))
+        cs.settings.set_figure_params(dpi=100, figsize=(5.5, 4.7))
         cs.pl.fate_coupling(
             adata,
             source="X_clone",
@@ -1205,6 +1217,8 @@ def analyze_cell_coupling(
     plot_correlation=True,
     order_map=False,
     plot_restricted=True,
+    included_fates_mode="until",
+    included_fates_N=[2],
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1233,6 +1247,8 @@ def analyze_cell_coupling(
         Needed for joint profiling
     short_names:
         A list of short names for SampleList. no nesting.
+    included_fates_mode:
+        {'only','until'}. until: include all previous fates up to...
     """
 
     selected_fates = []
@@ -1308,6 +1324,8 @@ def analyze_cell_coupling(
         plot_correlation=plot_correlation,
         order_map=order_map,
         plot_restricted=plot_restricted,
+        included_fates_mode=included_fates_mode,
+        included_fates_N=included_fates_N,
     )
     return adata, df_all
 
@@ -1393,7 +1411,11 @@ def clonal_analysis(
 
 
 def visualize_sc_CARLIN_data(
-    df_sc_data_input, plot_read_CARLIN=True, plot_expected_frequency=True, point_size=5
+    df_sc_data_input,
+    plot_read_CARLIN=True,
+    plot_expected_frequency=True,
+    point_size=30,
+    split_locus_read_CARLIN=False,
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -1453,26 +1475,28 @@ def visualize_sc_CARLIN_data(
     plt.xticks(rotation=90)
 
     if plot_read_CARLIN:
-        g = sns.FacetGrid(
-            df_sc_data.filter(
-                ["clone_id", "read", "CARLIN_length", "locus"], axis=1
-            ).drop_duplicates(),
-            col="locus",
-        )
-        g.map(sns.scatterplot, "read", "CARLIN_length", s=point_size)
-        plt.xscale("log")
-
-        # sns.scatterplot(
-        #     data=df_sc_data.filter(
-        #         ["clone_id", "read", "CARLIN_length", "locus"], axis=1
-        #     ).drop_duplicates(),
-        #     x="read",
-        #     y="CARLIN_length",
-        #     hue="locus",
-        #     hue_order=["Col", "Tigre", "Rosa"],
-        #     s=point_size,
-        # )
-        # plt.xscale("log")
+        if split_locus_read_CARLIN:
+            g = sns.FacetGrid(
+                df_sc_data.filter(
+                    ["clone_id", "read", "CARLIN_length", "locus"], axis=1
+                ).drop_duplicates(),
+                col="locus",
+            )
+            g.map(sns.scatterplot, "read", "CARLIN_length", s=point_size)
+            plt.xscale("log")
+        else:
+            fig, ax = plt.subplots()
+            sns.scatterplot(
+                data=df_sc_data.filter(
+                    ["clone_id", "read", "CARLIN_length", "locus"], axis=1
+                ).drop_duplicates(),
+                x="read",
+                y="CARLIN_length",
+                hue="locus",
+                hue_order=["Col", "Tigre", "Rosa"],
+                s=point_size,
+            )
+            plt.xscale("log")
 
     # filter to count only unique alleles
     g = sns.FacetGrid(
@@ -1512,6 +1536,14 @@ def visualize_sc_CARLIN_data(
     )
     plt.title("Cell number")
 
+    tot_cell_N = len(df_sc_data["RNA_id"].unique())
+    CC_cell_N = len(df_sc_data[df_sc_data.locus == "Col"]["RNA_id"].unique())
+    RC_cell_N = len(df_sc_data[df_sc_data.locus == "Rosa"]["RNA_id"].unique())
+    TC_cell_N = len(df_sc_data[df_sc_data.locus == "Tigre"]["RNA_id"].unique())
+    print(
+        f"Total detected cells: {tot_cell_N}; CC {CC_cell_N} ({CC_cell_N/tot_cell_N:.2f}); TC {TC_cell_N} ({TC_cell_N/tot_cell_N:.2f}); RC {RC_cell_N} ({RC_cell_N/tot_cell_N:.2f})"
+    )
+
     fig, ax = plt.subplots()
     df_clone_size = (
         df_sc_data.groupby(["clone_id", "library"])
@@ -1529,3 +1561,44 @@ def visualize_sc_CARLIN_data(
     sns.histplot(data=df_plot, x="allele_number")
     if np.sum(df_plot["allele_number"] >= 4) > 0:
         return df_plot[df_plot["allele_number"] >= 4]
+
+
+def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
+    """
+    df_input should be df_sc_data_HQ_joint_with_fate
+    """
+    from cospar.pl import rand_jitter
+
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+    df_plot = df_input.pivot(index="RNA_id", columns="locus", values=f"{fate}").rename(
+        columns={"CC": "Col", "TC": "Tigre", "RC": "Rosa"}
+    )
+    df_plot_tmp = df_plot.filter(["Col", "Tigre"]).dropna()
+    ax = sns.scatterplot(
+        x=rand_jitter(df_plot_tmp["Col"], std),
+        y=rand_jitter(df_plot_tmp["Tigre"], std),
+        ax=axs[0],
+        s=s,
+    )
+    ax.set_xlim([-0.05, 1.1])
+    ax.set_ylim([-0.05, 1.1])
+    df_plot_tmp = df_plot.filter(["Col", "Rosa"]).dropna()
+    ax = sns.scatterplot(
+        x=rand_jitter(df_plot_tmp["Col"], std),
+        y=rand_jitter(df_plot_tmp["Rosa"], std),
+        ax=axs[1],
+        s=s,
+    )
+    ax.set_xlim([-0.05, 1.1])
+    ax.set_ylim([-0.05, 1.1])
+    df_plot_tmp = df_plot.filter(["Tigre", "Rosa"]).dropna()
+    ax = sns.scatterplot(
+        x=rand_jitter(df_plot_tmp["Tigre"], std),
+        y=rand_jitter(df_plot_tmp["Rosa"], std),
+        ax=axs[2],
+        s=s,
+    )
+    ax.set_xlim([-0.05, 1.1])
+    ax.set_ylim([-0.05, 1.1])
+    plt.tight_layout()
+    axs[1].set_title(fate)
