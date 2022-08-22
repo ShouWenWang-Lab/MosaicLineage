@@ -1553,7 +1553,9 @@ def visualize_sc_CARLIN_data(
             g = sns.FacetGrid(
                 df_sc_data.filter(
                     ["clone_id", "read", "CARLIN_length", "locus"], axis=1
-                ).drop_duplicates(),
+                )
+                .drop_duplicates()
+                .reset_index(),
                 col="locus",
             )
             g.map(sns.scatterplot, "read", "CARLIN_length", s=point_size)
@@ -1563,7 +1565,9 @@ def visualize_sc_CARLIN_data(
             sns.scatterplot(
                 data=df_sc_data.filter(
                     ["clone_id", "read", "CARLIN_length", "locus"], axis=1
-                ).drop_duplicates(),
+                )
+                .drop_duplicates()
+                .reset_index(),
                 x="read",
                 y="CARLIN_length",
                 hue="locus",
@@ -1576,24 +1580,26 @@ def visualize_sc_CARLIN_data(
     if plot_expected_frequency:
         # filter to count only unique alleles
         g = sns.FacetGrid(
-            df_sc_data.filter(
-                ["clone_id", "sample_count", "locus"], axis=1
-            ).drop_duplicates(),
+            df_sc_data.filter(["clone_id", "sample_count", "locus"], axis=1)
+            .drop_duplicates()
+            .reset_index(),
             col="locus",
         )
         g.map(sns.histplot, "sample_count", log_scale=[False, True])
 
-        df_tmp = df_sc_data.filter(
-            ["clone_id", "expected_frequency", "locus"], axis=1
-        ).drop_duplicates()
+        df_tmp = (
+            df_sc_data.filter(["clone_id", "expected_frequency", "locus"], axis=1)
+            .drop_duplicates()
+            .reset_index()
+        )
         df_tmp["expected_frequency"] = 10 ** (-8) + df_tmp["expected_frequency"]
         g = sns.FacetGrid(df_tmp, col="locus")
         g.map(sns.histplot, "expected_frequency", log_scale=[True, True])
 
     g = sns.FacetGrid(
-        df_sc_data.filter(
-            ["clone_id", "CARLIN_length", "locus"], axis=1
-        ).drop_duplicates(),
+        df_sc_data.filter(["clone_id", "CARLIN_length", "locus"], axis=1)
+        .drop_duplicates()
+        .reset_index(),
         col="locus",
     )
     g.map(sns.histplot, "CARLIN_length", log_scale=[False, True])
