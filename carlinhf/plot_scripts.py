@@ -1452,6 +1452,35 @@ def single_cell_clonal_report(df_sc_data_input):
         f"Total detected cells: {tot_cell_N}; CC {CC_cell_N} ({CC_cell_N/tot_cell_N:.2f}); TC {TC_cell_N} ({TC_cell_N/tot_cell_N:.2f}); RC {RC_cell_N} ({RC_cell_N/tot_cell_N:.2f})"
     )
 
+    def extract_locus(x):
+        if len(set(x)) == 1:
+            return list(set(x))[0]
+        else:
+            return ">1"
+
+    fig, ax = plt.subplots()
+    df_plot = (
+        df_sc_data.groupby(["library", "cell_bc"])
+        .agg({"locus": extract_locus})
+        .reset_index()
+        .groupby(["library", "locus"])
+        .agg(cell_number=("cell_bc", lambda x: len(set(x))))
+        .reset_index()
+    )
+
+    df_plot.pivot(index="library", columns="locus", values="cell_number").plot(
+        kind="bar",
+        stacked=True,
+        color={
+            ">1": "#9467bd",
+            "Col": "#1f77b4",
+            "Rosa": "#2ca02c",
+            "Tigre": "#ff7f0e",
+        },
+    )
+    plt.legend(loc=[1.01, 0.3])
+    plt.ylabel("Cell number")
+
 
 def visualize_sc_CARLIN_data(
     df_sc_data_input,
@@ -1544,16 +1573,16 @@ def visualize_sc_CARLIN_data(
             plt.xscale("log")
 
     # filter to count only unique alleles
-    g = sns.FacetGrid(
-        df_sc_data.filter(
-            ["clone_id", "sample_count", "locus"], axis=1
-        ).drop_duplicates(),
-        col="locus",
-    )
-    g.map(sns.histplot, "sample_count", log_scale=[False, True])
-
-    # filter to count only unique alleles
     if plot_expected_frequency:
+        # filter to count only unique alleles
+        g = sns.FacetGrid(
+            df_sc_data.filter(
+                ["clone_id", "sample_count", "locus"], axis=1
+            ).drop_duplicates(),
+            col="locus",
+        )
+        g.map(sns.histplot, "sample_count", log_scale=[False, True])
+
         df_tmp = df_sc_data.filter(
             ["clone_id", "expected_frequency", "locus"], axis=1
         ).drop_duplicates()
