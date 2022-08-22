@@ -100,7 +100,10 @@ def generate_allele_info_across_experiments(
         with open(f"{data_path}/config.yaml", "r") as stream:
             file = yaml.safe_load(stream)
             SampleList = file["SampleList"]
-            read_cutoff_override = file["read_cutoff_override"]
+            if "read_cutoff_UMI_override" in file.keys():
+                read_cutoff_override = file["read_cutoff_UMI_override"]
+            elif "read_cutoff_override" in file.keys():
+                read_cutoff_override = file["read_cutoff_override"]
 
         for x in read_cutoff_override:
             if x == read_cutoff:
@@ -135,7 +138,7 @@ def generate_allele_info_across_experiments(
         .agg(
             UMI_count=("UMI_count", "sum"),
             sample_count=("sample_id", lambda x: len(set(x))),
-            sample_id=("sample_id", lambda x: set(x)),
+            sample_id=("sample_id", lambda x: list(set(x))),
         )
         .reset_index()
     )
@@ -164,21 +167,6 @@ def generate_allele_info_across_experiments(
         "expected_count", ascending=False
     )  # .filter(["allele","expected_frequency",'sample_count'])
     return df_merge, df_ref, map_dict
-
-
-def add_metadata(df_sc_data, plate_map=None):
-    if "library" in df_sc_data.columns:
-        df_sc_data["sample"] = df_sc_data["library"].apply(lambda x: x.split("_")[0])
-
-    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
-    df_sc_data["plate_ID"] = df_sc_data["sample"].apply(lambda x: x[:-3])
-    if plate_map is not None:
-        df_sc_data["plate_ID"] = df_sc_data["plate_ID"].map(plate_map)
-
-    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
-    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
-    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
-    return df_sc_data
 
 
 def load_and_annotate_sc_CARLIN_data(
@@ -266,7 +254,7 @@ def load_and_annotate_sc_CARLIN_data(
 
     # annotate single-cell sample information
     df_sc_data["locus"] = locus
-    df_sc_data = add_metadata(df_sc_data, plate_map=plate_map)
+    df_sc_data = car.add_metadata(df_sc_data, plate_map=plate_map)
 
     ## convert the bulk fate information to clone-fate table, and then merge with the sc clonal data
     ## This step needs to happen after *annotate single-cell sample information* so that
@@ -292,6 +280,7 @@ def merge_scCARLIN_to_bulk_CARLIN(
     locus="CC",
     BC_max_sample_count: int = 6,
     BC_max_freq: float = 10 ** (-4),
+    min_clone_size: int = 3,
 ):
     """
     Convert the single-cell CARLIN data to bulk like data, and
@@ -313,11 +302,21 @@ def merge_scCARLIN_to_bulk_CARLIN(
 
     df_merge_tmp = (
         pd.read_csv(f"{bulk_data_path}/merge_all/df_allele_all.csv")
-        .filter(["allele", "sample", "UMI_count", "expected_frequency", "sample_count"])
+        .filter(
+            [
+                "allele",
+                "sample",
+                "UMI_count",
+                "expected_frequency",
+                "sample_count",
+                "clone_size",
+            ]
+        )
         .fillna(0)
     )
     df_merge_tmp["allele"] = f"{locus}_" + df_merge_tmp["allele"]
     df_merge_tmp["source"] = "bulk"
+    df_merge_tmp = df_merge_tmp[df_merge_tmp["clone_size"] >= min_clone_size]
 
     df_merge = pd.concat([df_sc_bulk, df_merge_tmp], ignore_index=True)
     df_merge = df_merge[

@@ -10,6 +10,8 @@ from Bio import SeqIO
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
 
+import carlinhf.analysis_script as analysis
+
 #########################################
 
 ## We put CARLIN-specific operations here
@@ -330,6 +332,18 @@ def extract_CARLIN_info(
         df_tmp = df_tmp.merge(df_allele, on="allele")
         tmp_list.append(df_tmp)
     df_all = pd.concat(tmp_list)
+
+    # add clone_size information for each allele
+    df_tmp = df_all.copy()
+    df_tmp["CB_tmp"] = df_tmp["CB"].str.split(",")
+    df_tmp = df_tmp.explode("CB_tmp")
+    df_tmp["cell_id"] = df_tmp["sample"] + "_" + df_tmp["CB_tmp"]
+    df_clone_size = (
+        df_tmp.groupby("allele")
+        .agg(clone_size=("cell_id", lambda x: len(set(x))))
+        .reset_index()
+    )
+    df_all = df_all.merge(df_clone_size, on="allele")
     return df_all
 
 
@@ -433,3 +447,80 @@ def merge_three_locus(
         columns={"sample_x": "CC", "sample_y": "TC", "sample": "RC"}
     )
     return df_all, df_sample_association
+
+
+def extract_lineage(x):
+    """
+    We expect the structure like 'LL731-LF-B'
+    """
+    x = "-".join(x.split("-")[:3])  # keep at most 3 entries
+    if ("MPP3" in x) and ("MPP3-4" not in x):
+        return "MPP3-4".join(x.split("MPP3"))
+    else:
+        return x
+
+
+def rename_lib(x):
+    # this is for CARLIN data
+    if "_" in x:
+        x = x.split("_")[0]
+
+    if ("CC" in x) or ("TC" in x) or ("RC" in x):
+        return x[:-3]
+    else:
+        return x
+
+
+def extract_plate_ID(x):
+    # this is for single-cell Limecat protocl
+    return x[:-3]
+
+
+def add_metadata(df_sc_data, plate_map=None):
+    """
+    Annotate single-cell CARLIN data
+    """
+
+    if "library" in df_sc_data.columns:
+        # CARLIN like data, based on library
+        df_sc_data["library"] = df_sc_data["library"].apply(rename_lib)
+        df_sc_data["sample"] = df_sc_data["library"]
+        df_sc_data["plate_ID"] = df_sc_data["sample"]
+    elif "sample" in df_sc_data.columns:
+        # plate-based single-cell data
+        df_sc_data["plate_ID"] = df_sc_data["sample"].apply(extract_plate_ID)
+    else:
+        raise ValueError("library or sample not found")
+
+    df_sc_data["mouse"] = df_sc_data["sample"].apply(lambda x: x.split("-")[0])
+
+    if plate_map is not None:
+        df_sc_data["plate_ID"] = df_sc_data["plate_ID"].map(plate_map)
+
+    df_sc_data["RNA_id"] = df_sc_data["plate_ID"] + "_RNA_" + df_sc_data["cell_bc"]
+    df_sc_data["clone_id"] = df_sc_data["locus"] + "_" + df_sc_data["clone_id"]
+    df_sc_data["allele"] = df_sc_data["locus"] + "_" + df_sc_data["allele"]
+    return df_sc_data
+
+
+def generate_sc_CARLIN_from_CARLIN_output(df_all):
+    if "locus" not in df_all.columns:
+        df_all["locus"] = "locus"
+
+    if "CARLIN" not in df_all.columns:
+        df_all["CARLIN"] = df_all["allele"]
+
+    df_merge = df_all.fillna(0)
+    df_merge["library"] = df_merge["sample"]
+    df_merge["clone_size"] = df_merge["CB"].apply(lambda x: len(x.split(",")))
+    df_merge["CB"] = df_merge["CB"].str.split(",")
+    df_merge = (
+        df_merge.explode("CB")
+        .reset_index(drop=True)
+        .rename(columns={"CB": "cell_bc", "CARLIN": "clone_id"})
+    )
+    df_sc_CARLIN = add_metadata(df_merge)
+
+    df_sc_CARLIN["lineage"] = df_merge["library"].apply(extract_lineage)
+
+    return df_sc_CARLIN

@@ -1,4 +1,7 @@
 import numpy as np
+import pandas as pd
+
+import carlinhf.CARLIN as car
 
 rng = np.random.default_rng()
 
@@ -29,9 +32,8 @@ def extract_first_sample_from_a_nesting_list(SampleList):
     selected_fates = []
     for x in SampleList:
         if type(x) is list:
-            selected_fates.append(x[0])
-        else:
-            selected_fates.append(x)
+            x = x[0]
+        selected_fates.append(car.extract_lineage(car.rename_lib(x)))
     return selected_fates
 
 
@@ -87,3 +89,37 @@ def reverse_compliment(seq):
     map_seq = {"A": "T", "C": "G", "T": "A", "G": "C"}
     complement = "".join([map_seq[x] for x in reverse])
     return complement
+
+
+def order_sample_by_fates(sample_list):
+    # a reference order, capitalized
+    sample_order_0 = [
+        "LT-HSC",
+        "ST-HSC",
+        "HSC",
+        "MPP2",
+        "MPP3",
+        "MPP3-4",
+        "LK",
+        "MEG",
+        "ERY",
+        "GR",
+        "MONO",
+        "B",
+    ]
+    sample_order = dict(zip(sample_order_0, np.arange(len(sample_order_0))))
+    order_list = []
+    keys = np.array(list(sample_order.keys()))
+
+    for x in sample_list:
+        flag = False
+        for y in keys:
+            if y in x.upper():
+                order_list.append(sample_order[y])
+                flag = True
+                break
+        if not flag:
+            raise ValueError(f"{x} not found in sample key {keys}")
+    df = pd.DataFrame({"sample": sample_list, "lineage_order": order_list})
+    df["mouse"] = df["sample"].apply(lambda x: x.split("-")[0])
+    return df.sort_values(["mouse", "lineage_order"], ascending=True)["sample"].values

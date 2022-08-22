@@ -117,9 +117,11 @@ def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"]):
     )
     venn3_circles([set_1, set_2, set_3], linestyle="-", linewidth=0.5, color="grey")
     for text in vd3.set_labels:
-        text.set_fontsize(16)
+        if text != None:
+            text.set_fontsize(16)
     for text in vd3.subset_labels:
-        text.set_fontsize(16)
+        if text != None:
+            text.set_fontsize(16)
 
 
 def plot_venn2(data_1, data_2, labels=["1", "2"]):
