@@ -237,6 +237,7 @@ def denoise_sequence(
         )
 
     seq_list = np.array(input_seqs).astype(bytes)
+
     if read_count is None:
         read_count = np.ones(len(seq_list))
     if len(read_count) != len(input_seqs):
@@ -257,12 +258,13 @@ def denoise_sequence(
                 f"Sequences within Hamming distance {distance_threshold} are connected"
             )
 
-        clusterer = UMIClusterer(cluster_method="directional")
-        clustered_umis = clusterer(seq_count, threshold=distance_threshold)
         mapping = {}
-        for umi_list in clustered_umis:
-            for umi in umi_list:
-                mapping[umi] = umi_list[0]
+        if len(seq_count)>0:
+            clusterer = UMIClusterer(cluster_method="directional")
+            clustered_umis = clusterer(seq_count, threshold=distance_threshold)
+            for umi_list in clustered_umis:
+                for umi in umi_list:
+                    mapping[umi] = umi_list[0]
     elif method == "Hamming":
         if progress_bar:
             print(
@@ -482,6 +484,58 @@ def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
         ax.set_ylabel("Count")
     return df_statis
 
+def QC_report_for_inferred_clones(df_filter_reads,df_final):
+    fig,axs=plt.subplots(1,2,figsize=(8,4))
+    df_plot=df_filter_reads.groupby(['cell_id']).agg(read=('read','sum'),umi_count=('umi',lambda x: len(set(x)))).reset_index()
+    sns.scatterplot(data=df_plot,x='read',y='umi_count',ax=axs[0],label='raw')
+    sns.scatterplot(data=df_plot[df_plot['cell_id'].isin(df_final['cell_id'])],x='read',y='umi_count',ax=axs[0],label='valid')
+    axs[0].legend()
+    axs[0].set_xscale('log')
+    axs[0].set_yscale('log')
+    
+    df_final['CARLIN_length']=df_final['clone_id'].apply(lambda x: len(x))
+    ax=sns.scatterplot(data=df_final,y='CARLIN_length',x='read',ax=axs[1],color='#feb24c')
+    ax.set_xscale('log')
+    plt.tight_layout()
+    
+def extract_putative_valid_cell_id( df_input,
+    umi_key="umi",
+    cell_key="cell_id",
+    log_scale=True,
+    signal_threshold=2,
+    null_slope=1):
+    """
+    Identify putative valid cell barcodes
+    If a cell barcode is generated due to mutation error, this cell barcode should come from random mutation from all possible sources, 
+    and each read should be different, e.g., having a different UMI structure. So, the read number of the cell barcode should be ~ proportional
+    to the umi count for this cell barcode under this null hypothesis. 
+    
+    On the other hand, if a cell barcode is true, then apart from sequences due to random mutations, a major component of it should come with just
+    a few umi. So, the total umi_count should be much lower than the read cout for this cell barcode. 
+    
+    This assumes that a cell barcode has relatively abundant reads. Otherwise, it may masked by noise. So, this method only identifies 
+    highly reliable cell_id. You can identify more cell_ids by using the clone_id information.
+    
+    This is more true to cell_id than clone_id. For cell_id, each cell_id differs exactly 4bp (equal distance). 
+    It seems that when the sequencing or PCR makes a mistake a cell_id, it also makes a mistake at UMI. This correlation is non-trivial. 
+    It seems that once a mistake is made, it will continue to make mistakes. 
+    """
+    
+    df_temp = df_input.groupby([cell_key, umi_key]).sum("read").reset_index()
+    df_counts=df_temp.groupby(cell_key).agg(XX_read_count=('read','sum'),umi_count=('umi',lambda x: len(set(x)))).reset_index(
+                            ).rename(columns={'XX_read_count':f'{cell_key}_read_count'})
+                                            
+    df_counts['valid']=df_counts[f'{cell_key}_read_count']>signal_threshold*df_counts['umi_count']/null_slope
+    fig,ax=plt.subplots()
+    sns.scatterplot(data=df_counts,x=f'{cell_key}_read_count',y='umi_count',hue='valid')
+    N_max=np.max(df_counts[f'umi_count'])
+    plt.plot(null_slope*np.array([0,N_max]),[0,N_max],'-.r')
+    if log_scale:
+        plt.xscale('log')
+        plt.yscale('log')
+    valid_cell_N=len(df_counts.query('valid==True'))
+    print(f'Identified {valid_cell_N} putative {cell_key}')
+    return df_counts.query('valid==True')
 
 def QC_read_per_molecule(
     df_input_0,
