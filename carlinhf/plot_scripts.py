@@ -633,7 +633,7 @@ def allele_statistics_at_given_sampling_depth(
     ## Observed allele number
     g = sns.lmplot(
         data=df_Merge_2,
-        x="UMI_eventful",
+        x="eventful",
         y="total_alleles",
         hue="Design",
         ci=None,
@@ -647,11 +647,11 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("Observed allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/total_allele_vs_UMI_eventful.pdf")
+    plt.savefig(f"figure/{sample_key}/total_allele_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_2,
-        x="UMI_called",
+        x="called",
         y="total_alleles",
         hue="Design",
         ci=None,
@@ -665,12 +665,12 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("Observed allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/total_allele_vs_UMI_called.pdf")
+    plt.savefig(f"figure/{sample_key}/total_allele_vs_called.pdf")
 
     ## Observed singleton
     g = sns.lmplot(
         data=df_Merge_2,
-        x="UMI_eventful",
+        x="eventful",
         y="singleton",
         hue="Design",
         ci=None,
@@ -684,11 +684,11 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("# of alleles observed only once")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/singleton_vs_UMI_eventful.pdf")
+    plt.savefig(f"figure/{sample_key}/singleton_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_2,
-        x="UMI_called",
+        x="called",
         y="singleton",
         hue="Design",
         ci=None,
@@ -702,13 +702,13 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("# of alleles observed only once")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/singleton_vs_UMI_called.pdf")
+    plt.savefig(f"figure/{sample_key}/singleton_vs_called.pdf")
 
     ## Effective allele number
     df_Merge_3 = df_Merge_2[df_Merge_2.total_alleles > allele_cutoff]
     g = sns.lmplot(
         data=df_Merge_3,
-        x="UMI_eventful",
+        x="eventful",
         y="effective_allele_N",
         hue="Design",
         ci=None,
@@ -723,11 +723,11 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("Effective allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/effective_allele_vs_UMI_eventful.pdf")
+    plt.savefig(f"figure/{sample_key}/effective_allele_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_3,
-        x="UMI_called",
+        x="called",
         y="effective_allele_N",
         hue="Design",
         ci=None,
@@ -744,11 +744,11 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("Effective allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/effective_allele_vs_UMI_called.pdf")
+    plt.savefig(f"figure/{sample_key}/effective_allele_vs_called.pdf")
 
     ## Average deletion length over CARLIN potential
     x = "ave_del_len"
-    y = "CARLIN_potential_by_UMI"
+    y = "CARLIN_potential_by_tag"
     df_temp = df_Merge
     g = sns.lmplot(
         data=df_temp,
