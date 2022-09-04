@@ -1429,57 +1429,83 @@ def clonal_analysis(
         )
 
 
-def single_cell_clonal_report(df_sc_data_input):
-    df_sc_data = df_sc_data_input.copy()
-    locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa", "locus": "locus"}
-    df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
-    locus_list = df_sc_data["locus"].unique()
-    if np.in1d(["Col", "Tigre", "Rosa"], locus_list).sum() == 3:
+def extract_locus(x):
+    if len(set(x)) == 1:
+        return list(set(x))[0]
+    else:
+        return ">1"
+            
+def single_cell_clonal_report(df_sc_data_input,labels=None,
+                              selection_values=None,
+                             cell_id_key='RNA_id', 
+                              selection_key='locus',
+                             library_key='library',
+                             cell_bc_key='cell_bc'):
+    """
+    show overlap between 3 categorical groups specified at selection_key.
+    If labels and selection_values are provided, they need to match. 
+    """
+    
+    df_sc_data=df_sc_data_input.copy()
+    
+    
+    if (labels is not None) and (selection_values is not None):
+        df_sc_data[selection_key]=df_sc_data[selection_key].map(dict(zip(selection_values,labels)))
+    
+    if (labels is None):
+        labels=df_sc_data[selection_key].unique()
+    locus_list = df_sc_data[selection_key].unique()
+    if len(locus_list) != 3:
+        print('The selection_key need to have 3 different values')
+    else:
+        df_list=[]
+        cell_N=[]
+        for x in labels:
+            df_tmp=df_sc_data[df_sc_data[selection_key] == x][cell_id_key]
+            df_list.append(df_tmp)
+            cell_N.append(len(df_tmp.unique()))
+        tot_cell_N=len(df_sc_data[cell_id_key].unique())
+
         fig, ax = plt.subplots()
         plotting.plot_venn3(
-            df_sc_data[df_sc_data.locus == "Col"]["RNA_id"],
-            df_sc_data[df_sc_data.locus == "Rosa"]["RNA_id"],
-            df_sc_data[df_sc_data.locus == "Tigre"]["RNA_id"],
-            labels=["Col", "Rosa", "Tigre"],
+            df_list[0],
+            df_list[1],
+            df_list[2],
+            labels=labels,
         )
-        plt.title("Cell number")
+        plt.title(f"{cell_id_key} number")
 
-    tot_cell_N = len(df_sc_data["RNA_id"].unique())
-    CC_cell_N = len(df_sc_data[df_sc_data.locus == "Col"]["RNA_id"].unique())
-    RC_cell_N = len(df_sc_data[df_sc_data.locus == "Rosa"]["RNA_id"].unique())
-    TC_cell_N = len(df_sc_data[df_sc_data.locus == "Tigre"]["RNA_id"].unique())
-    print(
-        f"Total detected cells: {tot_cell_N}; CC {CC_cell_N} ({CC_cell_N/tot_cell_N:.2f}); TC {TC_cell_N} ({TC_cell_N/tot_cell_N:.2f}); RC {RC_cell_N} ({RC_cell_N/tot_cell_N:.2f})"
-    )
+        print(
+        f"""Total detected cells: {tot_cell_N}; {labels[0]} {cell_N[0]} ({cell_N[0]/tot_cell_N:.2f}); 
+                                  {labels[1]} {cell_N[1]} ({cell_N[1]/tot_cell_N:.2f}); 
+                                  {labels[2]} {cell_N[2]} ({cell_N[2]/tot_cell_N:.2f}); """
+        )
 
-    def extract_locus(x):
-        if len(set(x)) == 1:
-            return list(set(x))[0]
-        else:
-            return ">1"
 
-    fig, ax = plt.subplots()
-    df_plot = (
-        df_sc_data.groupby(["library", "cell_bc"])
-        .agg({"locus": extract_locus})
-        .reset_index()
-        .groupby(["library", "locus"])
-        .agg(cell_number=("cell_bc", lambda x: len(set(x))))
-        .reset_index()
-    )
+        df_plot = (
+            df_sc_data.groupby([library_key, cell_bc_key])
+            .agg({selection_key: extract_locus})
+            .reset_index()
+            .groupby([library_key, selection_key])
+            .agg(cell_number=(cell_bc_key, lambda x: len(set(x))))
+            .reset_index()
+        )
 
-    df_plot.pivot(index="library", columns="locus", values="cell_number").plot(
-        kind="bar",
-        stacked=True,
-        color={
-            ">1": "#9467bd",
-            "Col": "#1f77b4",
-            "Rosa": "#2ca02c",
-            "Tigre": "#ff7f0e",
-        },
-    )
-    plt.legend(loc=[1.01, 0.3])
-    plt.ylabel("Cell number")
+        if '>1' in df_plot[selection_key].unique():
+            labels=list(labels)+['>1']
+        df_plot.pivot(index=library_key, columns=selection_key, values="cell_number")[labels].plot(
+            kind="bar",
+            stacked=True,
+            color=sns.color_palette()
+            # color={
+            #     ">1": "#9467bd",
+            #     labels[0]: "#1f77b4",
+            #     labels[1]: "#2ca02c",
+            #     labels[2]: "#ff7f0e",
+            # },
+        )
+        plt.legend(loc=[1.01, 0.3])
+        plt.ylabel("Cell number")
 
 
 def visualize_sc_CARLIN_data(
@@ -1527,6 +1553,7 @@ def visualize_sc_CARLIN_data(
         hue="locus",
         hue_order=["Col", "Tigre", "Rosa"],
     )
+    plt.legend(loc=[1.01, 0.3])
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1536,6 +1563,7 @@ def visualize_sc_CARLIN_data(
         hue="locus",
         hue_order=["Col", "Tigre", "Rosa"],
     )
+    plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
 
     fig, ax = plt.subplots()
@@ -1546,8 +1574,11 @@ def visualize_sc_CARLIN_data(
         hue="locus",
         hue_order=["Col", "Tigre", "Rosa"],
     )
+    plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
 
+    single_cell_clonal_report(df_sc_data,labels=['Col','Tigre','Rosa'],selection_key='locus')
+        
     if plot_read_CARLIN:
         if split_locus_read_CARLIN:
             g = sns.FacetGrid(
@@ -1575,6 +1606,7 @@ def visualize_sc_CARLIN_data(
                 s=point_size,
             )
             plt.xscale("log")
+            plt.legend(loc=[1.01, 0.3])
 
     # filter to count only unique alleles
     if plot_expected_frequency:
@@ -1607,7 +1639,6 @@ def visualize_sc_CARLIN_data(
     # sns.histplot(data=df_sc_data,x='CARLIN_length',bins=50,hue='locus',multiple='fill',element='poly')
     # #plt.xscale('log')
 
-    single_cell_clonal_report(df_sc_data_input)
 
     df_clone_size = (
         df_sc_data.groupby(["clone_id", "locus"])
@@ -1654,31 +1685,38 @@ def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
         .drop_duplicates()
         .pivot(index="RNA_id", columns="locus", values=f"{fate}")
         .rename(columns={"CC": "Col", "TC": "Tigre", "RC": "Rosa"})
-    )
-    df_plot_tmp = df_plot.filter(["Col", "Tigre"]).dropna()
+    ).reset_index()
+    df_plot['source']=df_plot['RNA_id'].apply(lambda x: x.split('_')[0])
+    df_plot_tmp = df_plot.filter(["Col", "Tigre","source"]).dropna()
     ax = sns.scatterplot(
+        data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Col"], std),
         y=rand_jitter(df_plot_tmp["Tigre"], std),
         ax=axs[0],
         s=s,
+        hue='source'
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Col", "Rosa"]).dropna()
+    df_plot_tmp = df_plot.filter(["Col", "Rosa","source"]).dropna()
     ax = sns.scatterplot(
+        data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Col"], std),
         y=rand_jitter(df_plot_tmp["Rosa"], std),
         ax=axs[1],
         s=s,
+        hue='source'
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Tigre", "Rosa"]).dropna()
+    df_plot_tmp = df_plot.filter(["Tigre", "Rosa","source"]).dropna()
     ax = sns.scatterplot(
+        data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Tigre"], std),
         y=rand_jitter(df_plot_tmp["Rosa"], std),
         ax=axs[2],
         s=s,
+        hue='source'
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])

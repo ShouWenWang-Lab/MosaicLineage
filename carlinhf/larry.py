@@ -115,17 +115,21 @@ def denoise_clonal_data(
         or `CARLIN.CARLIN_raw_reads` (typically further filtered by CARLIN.CARLIN_preprocessing)
     target_key:
         The target field to correct sequeuncing/PCR errors.
+    read_cutoff:
+        Only use sequences >= this read_cutoff
     denoise_method:
         "Hamming", or "UMI_tools". The "Hamming" method works better.
-    per_cell:
+    per_sample:
         denoise for each sample sepaerately, where we adjust the read threshold per sample.
         This can be cell or library.  The right input could be: None, 'cell_id', 'library'
     distance_threshold:
         distances to connect two sequences.
     whiteList:
         Only works for the method "Hamming"
-    read_cutoff_ratio:
-        only for per_cell=True. Help to modulate the read_cutoff per cell
+    plot_report:
+        Show the report of correction, like clone size etc
+    group_keys:
+        A list of keys to aggregate the sequences and sum over the read counts
     progress_bar:
         show progress bar
 

@@ -229,14 +229,24 @@ def load_and_annotate_sc_CARLIN_data(
     df_list = []
     for sample in SampleList:
         if sc_data_source == "SW":
-            df_sc_tmp = pd.read_csv(
-                f"{sc_root_path}/{sample}/called_barcodes_by_SW_method.csv"
-            )
+            file_path=f"{sc_root_path}/{sample}/called_barcodes_by_SW_method.csv"
+            if os.path.exists(file_path):
+                df_sc_tmp = pd.read_csv(
+                    file_path
+                )
+            else:
+                print(f'{file_path} does not exist. Skip!')
         else:
             print(
                 "load allele data identified with either original and new (SW) method"
             )
-            df_sc_tmp = pd.read_csv(f"{sc_root_path}/{sample}/df_outer_joint.csv")
+            file_path=f"{sc_root_path}/{sample}/df_outer_joint.csv"
+            if os.path.exists(file_path):
+                df_sc_tmp = pd.read_csv(
+                    file_path
+                )
+            else:
+                print(f'{file_path} does not exist. Skip!')
         df_list.append(df_sc_tmp)
     df_sc_data = pd.concat(df_list, ignore_index=True)
 
@@ -574,3 +584,16 @@ def integrate_early_clone_and_fate(
         df_final_tmp.filter(["clone_id", "fate"]), on="clone_id", how="left"
     )
     return df_final_tmp, df_cell_to_BC
+
+
+def estimate_error_rate(df):
+    df_plot = df.groupby(["cell_id"]).agg(
+        clone_measure_N=("clone_id", lambda x: len(x)),
+).reset_index()
+    df_sub=df[df['cell_id'].isin(df_plot[df_plot['clone_measure_N']>1]['cell_id'].to_list())
+               ].sort_values(['RNA_id','locus','read'],ascending=False).set_index(['RNA_id','locus'])
+    
+    error_rate=(df_sub.groupby(["cell_id"]).agg(
+        unique_allele_N=("allele", lambda x: len(set(x))),
+    ).reset_index()['unique_allele_N']>1).mean()
+    return pd.DataFrame({'>1_observation':[len(df_sub['cell_id'].unique())],'error_rate':[error_rate]}).set_index('error_rate')
