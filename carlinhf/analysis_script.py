@@ -162,7 +162,9 @@ def generate_allele_info_across_experiments(
     ax.set_xlabel("Occurence across samples")
 
     df_ref = df_group.rename(columns={"UMI_count": "expected_count"}).assign(
-        expected_frequency=lambda x: x["expected_count"] / x["expected_count"].sum()
+        expected_frequency=lambda x: x["expected_count"]
+        / x["expected_count"].sum()
+        * len(df_ref)
     )
     df_ref = df_ref.sort_values(
         "expected_count", ascending=False
