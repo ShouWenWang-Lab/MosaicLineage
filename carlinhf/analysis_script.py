@@ -81,6 +81,7 @@ def generate_allele_info_across_experiments(
     target_data_list,
     read_cutoff=3,
     root_path="/Users/shouwenwang/Dropbox (HMS)/shared_folder_with_Li/DATA/CARLIN",
+    mouse_label="LL",
 ):
     """
     Merge a given set of experiments at given read_cutoff.
@@ -121,7 +122,7 @@ def generate_allele_info_across_experiments(
     df_merge = pd.concat(df_list, ignore_index=True)
     map_dict = {}
     for x in sorted(set(df_merge["sample"])):
-        mouse = "LL" + x.split("LL")[1][:3]
+        mouse = mouse_label + x.split(mouse_label)[1][:3]
         embryo_id = [f"E{j}" for j in range(20)]
         final_id = mouse
         for y in embryo_id:
