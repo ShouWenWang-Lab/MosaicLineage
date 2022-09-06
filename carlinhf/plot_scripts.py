@@ -1511,7 +1511,7 @@ def single_cell_clonal_report(df_sc_data_input,labels=None,
 def visualize_sc_CARLIN_data(
     df_sc_data_input,
     plot_read_CARLIN=True,
-    plot_expected_frequency=True,
+    plot_normalized_count=True,
     point_size=30,
     split_locus_read_CARLIN=False,
 ):
@@ -1609,7 +1609,7 @@ def visualize_sc_CARLIN_data(
             plt.legend(loc=[1.01, 0.3])
 
     # filter to count only unique alleles
-    if plot_expected_frequency:
+    if plot_normalized_count:
         # filter to count only unique alleles
         g = sns.FacetGrid(
             df_sc_data.filter(["clone_id", "sample_count", "locus"], axis=1)
@@ -1620,13 +1620,13 @@ def visualize_sc_CARLIN_data(
         g.map(sns.histplot, "sample_count", log_scale=[False, True])
 
         df_tmp = (
-            df_sc_data.filter(["clone_id", "expected_frequency", "locus"], axis=1)
+            df_sc_data.filter(["clone_id", "normalized_count", "locus"], axis=1)
             .drop_duplicates()
             .reset_index()
         )
-        df_tmp["expected_frequency"] = 10 ** (-8) + df_tmp["expected_frequency"]
+        df_tmp["normalized_count"] = 10 ** (-8) + df_tmp["normalized_count"]
         g = sns.FacetGrid(df_tmp, col="locus")
-        g.map(sns.histplot, "expected_frequency", log_scale=[True, True])
+        g.map(sns.histplot, "normalized_count", log_scale=[True, True])
 
     g = sns.FacetGrid(
         df_sc_data.filter(["clone_id", "CARLIN_length", "locus"], axis=1)
