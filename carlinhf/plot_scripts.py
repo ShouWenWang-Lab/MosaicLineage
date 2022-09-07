@@ -83,7 +83,9 @@ def mutation_statistics_box_plot(
         fig.savefig(f"figure/{sample_key}/{key}_202105.pdf")
 
 
-def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
+def mutation_statistics_distribution_per_allele(
+    df_LL, df_SB, sample_key, label_1="CARLIN", label_2="ATCG-v1"
+):
     """
     Compare mutation statistics per allele between two data source
 
@@ -108,10 +110,10 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=mut_SB_hist_x[:-1], y=mut_SB_hist_y, label="Cas9", marker="o", ax=ax
+        x=mut_SB_hist_x[:-1], y=mut_SB_hist_y, label=label_1, marker="o", ax=ax
     )
     ax = sns.lineplot(
-        x=mut_LL_hist_x[:-1], y=mut_LL_hist_y, label="Cas9-TdT", ax=ax, marker="o"
+        x=mut_LL_hist_x[:-1], y=mut_LL_hist_y, label=label_2, ax=ax, marker="o"
     )
 
     ax.set_xlim([-0.1, 10])
@@ -136,9 +138,9 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     )
 
     fig, ax = plt.subplots()
-    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label="Cas9", marker="o")
+    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label_1, marker="o")
     ax = sns.lineplot(
-        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label="Cas9-TdT", ax=ax, marker="o"
+        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label=label_2, ax=ax, marker="o"
     )
 
     ax.set_xlim([-0.1, 10])
@@ -160,9 +162,9 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     )
 
     fig, ax = plt.subplots()
-    ax = sns.lineplot(x=del_SB_hist_x[:-1], y=del_SB_hist_y, label="Cas9", marker="o")
+    ax = sns.lineplot(x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label_1, marker="o")
     ax = sns.lineplot(
-        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label="Cas9-TdT", ax=ax, marker="o"
+        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2, ax=ax, marker="o"
     )
 
     ax.set_xlim([-0.1, 10])
@@ -196,10 +198,10 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label="Cas9"
+        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label_1
     )  # ,marker='o')
     ax = sns.lineplot(
-        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label="Cas9-TdT"
+        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label=label_2
     )  # ,ax=ax,marker='o')
 
     ax.set_xlim([-0.1, 30])
@@ -228,10 +230,10 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     )
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label="Cas9"
+        x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label_1
     )  # ,marker='o')
     ax = sns.lineplot(
-        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label="Cas9-TdT"
+        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label=label_2
     )  # ,ax=ax,marker='o')
 
     ax.set_xlim([-0.1, 30])
@@ -262,10 +264,10 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label="Cas9"
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label_1
     )  # ,marker='o')
     ax = sns.lineplot(
-        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label="Cas9-TdT"
+        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2
     )  # ,ax=ax,marker='o')
 
     # ax.set_xlim([-0.1,30])
@@ -294,10 +296,10 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     )
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label="Cas9"
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label_1
     )  # ,marker='o')
     ax = sns.lineplot(
-        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label="Cas9-TdT"
+        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2
     )  # ,ax=ax,marker='o')
 
     # ax.set_xlim([-0.1,30])
@@ -314,9 +316,9 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
     y_SB = np.cumsum(del_SB_hist_y)
     y_LL = np.cumsum(del_LL_hist_y)
     fig, ax = plt.subplots()
-    sns.lineplot(x=[0] + list(del_SB_hist_x[:-1]), y=[0] + list(y_SB), label="Cas9")
+    sns.lineplot(x=[0] + list(del_SB_hist_x[:-1]), y=[0] + list(y_SB), label=label_1)
     ax = sns.lineplot(
-        x=[0] + list(del_LL_hist_x[:-1]), y=[0] + list(y_LL), label="Cas9-TdT"
+        x=[0] + list(del_LL_hist_x[:-1]), y=[0] + list(y_LL), label=label_2
     )
     ax.set_xlabel("Single deletion length")
     ax.set_ylabel("Cumulative deletion frequency")
@@ -327,7 +329,7 @@ def mutation_statistics_distribution_per_allele(df_LL, df_SB, sample_key):
 
 
 def mutation_statistics_distribution_per_allele_single_input(
-    df_SB, sample_key, label="Cas9"
+    df_SB, sample_key, label="CARLIN"
 ):
     """
     Check mutation statistics per allele from a single data source
@@ -531,7 +533,9 @@ def mutation_statistics_distribution_per_allele_single_input(
     )
 
 
-def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
+def mutation_statistics_distribution_UMI(
+    df_LL, df_SB, sample_key, label_1="CARLIN", label_2="ATCG-v1"
+):
     """
     Mutation statistics per UMI between two data source
 
@@ -575,9 +579,9 @@ def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
         f"Mean insertion length for Cas9: {np.mean(ins_length_SB)}; for Cas9-TdT: {np.mean(ins_length_LL)}"
     )
 
-    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label="Cas9", marker="o")
+    ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label_1, marker="o")
     ax = sns.lineplot(
-        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label="Cas9-TdT", ax=ax, marker="o"
+        x=ins_LL_hist_x[:-1], y=ins_LL_hist_y, label=label_2, ax=ax, marker="o"
     )
     # plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     ax.set_xlim([-0.1, 10.2])
@@ -590,7 +594,12 @@ def mutation_statistics_distribution_UMI(df_LL, df_SB, sample_key):
 
 
 def allele_statistics_at_given_sampling_depth(
-    df_Merge, sample_key, removed_sample=None, allele_cutoff=0
+    df_Merge,
+    sample_key,
+    removed_sample=None,
+    allele_cutoff=0,
+    color=None,
+    legend=None,
 ):
 
     # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
@@ -1434,37 +1443,43 @@ def extract_locus(x):
         return list(set(x))[0]
     else:
         return ">1"
-            
-def single_cell_clonal_report(df_sc_data_input,labels=None,
-                              selection_values=None,
-                             cell_id_key='RNA_id', 
-                              selection_key='locus',
-                             library_key='library',
-                             cell_bc_key='cell_bc'):
+
+
+def single_cell_clonal_report(
+    df_sc_data_input,
+    labels=None,
+    selection_values=None,
+    cell_id_key="RNA_id",
+    selection_key="locus",
+    library_key="library",
+    cell_bc_key="cell_bc",
+    data_des="",
+):
     """
     show overlap between 3 categorical groups specified at selection_key.
-    If labels and selection_values are provided, they need to match. 
+    If labels and selection_values are provided, they need to match.
     """
-    
-    df_sc_data=df_sc_data_input.copy()
-    
-    
+
+    df_sc_data = df_sc_data_input.copy()
+
     if (labels is not None) and (selection_values is not None):
-        df_sc_data[selection_key]=df_sc_data[selection_key].map(dict(zip(selection_values,labels)))
-    
-    if (labels is None):
-        labels=df_sc_data[selection_key].unique()
+        df_sc_data[selection_key] = df_sc_data[selection_key].map(
+            dict(zip(selection_values, labels))
+        )
+
+    if labels is None:
+        labels = df_sc_data[selection_key].unique()
     locus_list = df_sc_data[selection_key].unique()
     if len(locus_list) != 3:
-        print('The selection_key need to have 3 different values')
+        print("The selection_key need to have 3 different values")
     else:
-        df_list=[]
-        cell_N=[]
+        df_list = []
+        cell_N = []
         for x in labels:
-            df_tmp=df_sc_data[df_sc_data[selection_key] == x][cell_id_key]
+            df_tmp = df_sc_data[df_sc_data[selection_key] == x][cell_id_key]
             df_list.append(df_tmp)
             cell_N.append(len(df_tmp.unique()))
-        tot_cell_N=len(df_sc_data[cell_id_key].unique())
+        tot_cell_N = len(df_sc_data[cell_id_key].unique())
 
         fig, ax = plt.subplots()
         plotting.plot_venn3(
@@ -1474,13 +1489,14 @@ def single_cell_clonal_report(df_sc_data_input,labels=None,
             labels=labels,
         )
         plt.title(f"{cell_id_key} number")
+        plt.tight_layout()
+        fig.savefig("figure/venn_plot_allele_overlap_{data_des}.pdf")
 
         print(
-        f"""Total detected cells: {tot_cell_N}; {labels[0]} {cell_N[0]} ({cell_N[0]/tot_cell_N:.2f}); 
+            f"""Total detected cells: {tot_cell_N}; {labels[0]} {cell_N[0]} ({cell_N[0]/tot_cell_N:.2f}); 
                                   {labels[1]} {cell_N[1]} ({cell_N[1]/tot_cell_N:.2f}); 
                                   {labels[2]} {cell_N[2]} ({cell_N[2]/tot_cell_N:.2f}); """
         )
-
 
         df_plot = (
             df_sc_data.groupby([library_key, cell_bc_key])
@@ -1491,9 +1507,11 @@ def single_cell_clonal_report(df_sc_data_input,labels=None,
             .reset_index()
         )
 
-        if '>1' in df_plot[selection_key].unique():
-            labels=list(labels)+['>1']
-        df_plot.pivot(index=library_key, columns=selection_key, values="cell_number")[labels].plot(
+        if ">1" in df_plot[selection_key].unique():
+            labels = list(labels) + [">1"]
+        df_plot.pivot(index=library_key, columns=selection_key, values="cell_number")[
+            labels
+        ].plot(
             kind="bar",
             stacked=True,
             color=sns.color_palette()
@@ -1506,6 +1524,8 @@ def single_cell_clonal_report(df_sc_data_input,labels=None,
         )
         plt.legend(loc=[1.01, 0.3])
         plt.ylabel("Cell number")
+        plt.tight_layout()
+        fig.savefig("figure/cell_coverage_{data_des}.pdf")
 
 
 def visualize_sc_CARLIN_data(
@@ -1577,8 +1597,10 @@ def visualize_sc_CARLIN_data(
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
 
-    single_cell_clonal_report(df_sc_data,labels=['Col','Tigre','Rosa'],selection_key='locus')
-        
+    single_cell_clonal_report(
+        df_sc_data, labels=["Col", "Tigre", "Rosa"], selection_key="locus"
+    )
+
     if plot_read_CARLIN:
         if split_locus_read_CARLIN:
             g = sns.FacetGrid(
@@ -1639,7 +1661,6 @@ def visualize_sc_CARLIN_data(
     # sns.histplot(data=df_sc_data,x='CARLIN_length',bins=50,hue='locus',multiple='fill',element='poly')
     # #plt.xscale('log')
 
-
     df_clone_size = (
         df_sc_data.groupby(["clone_id", "locus"])
         .agg(clone_size=("RNA_id", lambda x: len(set(x))))
@@ -1686,37 +1707,37 @@ def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
         .pivot(index="RNA_id", columns="locus", values=f"{fate}")
         .rename(columns={"CC": "Col", "TC": "Tigre", "RC": "Rosa"})
     ).reset_index()
-    df_plot['source']=df_plot['RNA_id'].apply(lambda x: x.split('_')[0])
-    df_plot_tmp = df_plot.filter(["Col", "Tigre","source"]).dropna()
+    df_plot["source"] = df_plot["RNA_id"].apply(lambda x: x.split("_")[0])
+    df_plot_tmp = df_plot.filter(["Col", "Tigre", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Col"], std),
         y=rand_jitter(df_plot_tmp["Tigre"], std),
         ax=axs[0],
         s=s,
-        hue='source'
+        hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Col", "Rosa","source"]).dropna()
+    df_plot_tmp = df_plot.filter(["Col", "Rosa", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Col"], std),
         y=rand_jitter(df_plot_tmp["Rosa"], std),
         ax=axs[1],
         s=s,
-        hue='source'
+        hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Tigre", "Rosa","source"]).dropna()
+    df_plot_tmp = df_plot.filter(["Tigre", "Rosa", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
         x=rand_jitter(df_plot_tmp["Tigre"], std),
         y=rand_jitter(df_plot_tmp["Rosa"], std),
         ax=axs[2],
         s=s,
-        hue='source'
+        hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])

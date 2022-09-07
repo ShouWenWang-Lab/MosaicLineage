@@ -124,7 +124,7 @@ def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"]):
             text.set_fontsize(16)
 
 
-def plot_venn2(data_1, data_2, labels=["1", "2"]):
+def plot_venn2(data_1, data_2, labels=["1", "2"],set_colors=("#c4e6ff", "#F4ACB7")):
 
     set_1 = set(data_1)
     set_2 = set(data_2)
@@ -141,7 +141,7 @@ def plot_venn2(data_1, data_2, labels=["1", "2"]):
     vd3 = venn2(
         [set_1, set_2],
         set_labels=labels,
-        set_colors=("#c4e6ff", "#F4ACB7"),
+        set_colors=set_colors,
         alpha=0.8,
     )
     venn2_circles([set_1, set_2], linestyle="-", linewidth=0.5, color="grey")
