@@ -672,8 +672,8 @@ def generate_adata_sample_by_allele(df_data, count_value_key="UMI_count", use_UM
     adata_orig.obs["state_info"] = all_cells
     adata_orig.obsm["X_clone"] = X_clone
     adata_orig.uns["data_des"] = ["hi"]
-    if "expected_frequency" in df_data.keys():
-        adata_orig.uns["expected_frequency"] = np.array(df_data["expected_frequency"])
+    if "normalized_count" in df_data.keys():
+        adata_orig.uns["normalized_count"] = np.array(df_data["normalized_count"])
     adata_orig.uns[count_value_key] = np.array(df_data[count_value_key])
 
     if "mouse" in df_data.keys():
@@ -751,8 +751,8 @@ def generate_adata_allele_by_mutation(
     adata_orig.obsm["X_clone"] = X_clone
     adata_orig.uns["data_des"] = ["hi"]
     adata_orig.obs["allele"] = np.array(df_data["allele"])
-    if "expected_frequency" in df_data.keys():
-        adata_orig.obs["expected_frequency"] = np.array(df_data["expected_frequency"])
+    if "normalized_count" in df_data.keys():
+        adata_orig.obs["normalized_count"] = np.array(df_data["normalized_count"])
     adata_orig.obs[count_value_key] = np.array(df_data[count_value_key])
 
     if "mouse" in df_data.keys():

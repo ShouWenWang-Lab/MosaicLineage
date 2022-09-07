@@ -44,7 +44,7 @@ def load_all_samples_to_adata(
 
     print("Clone number (before correction): {}".format(len(set(df_all["allele"]))))
     print("Cell number (before correction): {}".format(len(df_all["allele"])))
-    df_HQ = df_all[df_all.expected_frequency < frequuency_cutoff]
+    df_HQ = df_all[df_all.normalized_count < frequuency_cutoff]
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
@@ -121,6 +121,7 @@ def generate_allele_info_across_experiments(
 
     df_merge = pd.concat(df_list, ignore_index=True)
     map_dict = {}
+
     for x in sorted(set(df_merge["sample"])):
         mouse = mouse_label + x.split(mouse_label)[1][:3]
         embryo_id = [f"E{j}" for j in range(20)]
@@ -161,14 +162,14 @@ def generate_allele_info_across_experiments(
     ax.set_ylabel("Allele histogram")
     ax.set_xlabel("Occurence across samples")
 
-    df_ref = df_group.rename(columns={"UMI_count": "expected_count"}).assign(
-        expected_frequency=lambda x: x["expected_count"]
-        / x["expected_count"].sum()
-        * len(df_ref)
+    df_ref = df_group.rename(columns={"UMI_count": "observed_count"}).assign(
+        normalized_count=lambda x: x["observed_count"]
+        / x["observed_count"].sum()
+        * len(df_group)
     )
     df_ref = df_ref.sort_values(
-        "expected_count", ascending=False
-    )  # .filter(["allele","expected_frequency",'sample_count'])
+        "observed_count", ascending=False
+    )  # .filter(["allele","normalized_count",'sample_count'])
     return df_merge, df_ref, map_dict
 
 
@@ -261,7 +262,7 @@ def load_and_annotate_sc_CARLIN_data(
 
     # add expected allele frequency, and filter out promiscuous clones
     df_ref = pd.read_csv(f"{ref_dir}/reference_merged_alleles_{locus}.csv").filter(
-        ["allele", "expected_frequency", "sample_count"]
+        ["allele", "normalized_count", "sample_count"]
     )
     df_sc_data = df_sc_data.merge(df_ref, on="allele", how="left").fillna(0)
 
@@ -282,7 +283,7 @@ def load_and_annotate_sc_CARLIN_data(
     # df_sc_data = df_sc_data.merge(df_clone_fate, on="allele", how="left")
     # df_sc_data["fate"] = df_sc_data["fate"].fillna("no_fates")
     # print("------unique fates---------", set(df_sc_data["fate"]))
-    print("------expected frequency---------", set(df_sc_data["expected_frequency"]))
+    print("------expected frequency---------", set(df_sc_data["normalized_count"]))
 
     return df_sc_data, df_clone_fate, df_fate_matrix
 
@@ -292,7 +293,7 @@ def merge_scCARLIN_to_bulk_CARLIN(
     bulk_data_path,
     locus="CC",
     BC_max_sample_count: int = 6,
-    BC_max_freq: float = 10 ** (-4),
+    BC_max_freq: float = 2,
     min_clone_size: int = 3,
 ):
     """
@@ -306,7 +307,7 @@ def merge_scCARLIN_to_bulk_CARLIN(
         df_sc_data.groupby(["allele", "sample"])
         .agg(
             UMI_count=("cell_id", lambda x: len(set(x))),
-            expected_frequency=("expected_frequency", "mean"),
+            normalized_count=("normalized_count", "mean"),
             sample_count=("sample_count", "mean"),
         )
         .reset_index()
@@ -320,7 +321,7 @@ def merge_scCARLIN_to_bulk_CARLIN(
                 "allele",
                 "sample",
                 "UMI_count",
-                "expected_frequency",
+                "normalized_count",
                 "sample_count",
                 "clone_size",
             ]
@@ -333,7 +334,7 @@ def merge_scCARLIN_to_bulk_CARLIN(
 
     df_merge = pd.concat([df_sc_bulk, df_merge_tmp], ignore_index=True)
     df_merge = df_merge[
-        (df_merge["expected_frequency"] <= BC_max_freq)
+        (df_merge["normalized_count"] <= BC_max_freq)
         & (df_merge["sample_count"] <= BC_max_sample_count)
     ]
     return df_merge
@@ -535,7 +536,7 @@ def load_single_cell_CARLIN(root_path, plate_map, read_cutoff=2, locus=None):
 
     df_ref = pd.read_csv(
         f"/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data/reference_merged_alleles_{locus}.csv"
-    ).filter(["allele", "expected_frequency", "sample_count"])
+    ).filter(["allele", "normalized_count", "sample_count"])
     df_out = df_out.merge(df_ref, on="allele", how="left")
     df_out["plate_ID"] = (
         df_out["sample"].apply(lambda x: x[:-3]).map(plate_map)
@@ -565,7 +566,7 @@ def integrate_early_clone_and_fate(
         .fillna(0)
         .assign(
             HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-            & (x["expected_frequency"] <= BC_max_freq)
+            & (x["normalized_count"] <= BC_max_freq)
         )
         .query("HQ==True")
     )
