@@ -107,44 +107,102 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
     if not (protocol in supported_protocol):
         raise ValueError(f"Only support protocols: {supported_protocol}")
 
-    if protocol == "scLimeCat":
+    if protocol.startswith("sc"):
         seq_list = []
-        with gzip.open(f"{data_path}/{sample}_L001_R1_001.fastq.gz", "rt") as handle:
-            for record in SeqIO.parse(handle, "fastq"):
-                seq_list.append(str(record.seq))
-
-        tag_list = []
-        with gzip.open(f"{data_path}/{sample}_L001_R2_001.fastq.gz", "rt") as handle:
-            for record in SeqIO.parse(handle, "fastq"):
-                tag_list.append(str(record.seq))
-
-        df_seq = pd.DataFrame({"Tag": tag_list, "Seq": seq_list})
-        df_seq["cell_bc"] = df_seq["Tag"].apply(lambda x: x[:8])
-        df_seq["library"] = sample
-        df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
-        df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[8:16])
-        df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
-        df_seq["clone_id"] = df_seq["Seq"]
-    elif protocol == "sc10xV3":
-        seq_list = []
+        seq_quality = []
         with gzip.open(f"{data_path}/{sample}_L001_R2_001.fastq.gz", "rt") as handle:
             for record in SeqIO.parse(handle, "fastq"):
                 seq_list.append(str(record.seq))
+                quality_tmp = record.letter_annotations["phred_quality"]
+                seq_quality.append(quality_tmp)
 
         tag_list = []
+        tag_quality = []
         with gzip.open(f"{data_path}/{sample}_L001_R1_001.fastq.gz", "rt") as handle:
             for record in SeqIO.parse(handle, "fastq"):
                 tag_list.append(str(record.seq))
+                quality_tmp = record.letter_annotations["phred_quality"]
+                tag_quality.append(quality_tmp)
 
-        df_seq = pd.DataFrame({"Tag": tag_list, "Seq": seq_list})
-        df_seq["cell_bc"] = df_seq["Tag"].apply(lambda x: x[:16])
+        if protocol == "scLimeCat":
+            bc_len = 8
+            umi_len = 8
+        elif protocol == "sc10xV3":
+            bc_len = 16
+            umi_len = 12
+        else:
+            raise ValueError(f"{protocol} must be among scLimeCat, sc10xV3")
+
+        df_seq = pd.DataFrame(
+            {
+                "Tag": tag_list,
+                "Seq": seq_list,
+                "Seq_quality": seq_quality,
+                "Tag_quality": tag_quality,
+            }
+        )
+        df_seq["cell_bc"] = df_seq["Tag"].apply(lambda x: x[:bc_len])
+        df_seq["cell_bc_quality_mean"] = df_seq["Tag_quality"].apply(
+            lambda x: np.mean(x[:bc_len])
+        )
+        df_seq["cell_bc_quality_min"] = df_seq["Tag_quality"].apply(
+            lambda x: np.min(x[:bc_len])
+        )
         df_seq["library"] = sample
         df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
-        df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[16:28])
+        df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[bc_len : (bc_len + umi_len)])
+        df_seq["umi_quality_mean"] = df_seq["Tag_quality"].apply(
+            lambda x: np.mean(x[bc_len : (bc_len + umi_len)])
+        )
+        df_seq["umi_quality_min"] = df_seq["Tag_quality"].apply(
+            lambda x: np.min(x[bc_len : (bc_len + umi_len)])
+        )
         df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
         df_seq["clone_id"] = df_seq["Seq"]
+        df_seq["clone_id_quality_mean"] = df_seq["Seq_quality"].apply(
+            lambda x: np.mean(x)
+        )
+        df_seq["clone_id_quality_min"] = df_seq["Seq_quality"].apply(
+            lambda x: np.min(x)
+        )
+        df_seq = df_seq.drop(["Tag", "Seq", "Seq_quality", "Tag_quality"], axis=1)
 
-    return df_seq.drop("Tag", axis=1)
+    elif protocol.startswith("Bulk"):
+        if "UMI" in protocol:
+            UMI_length = int(protocol.split("UMI")[0][-2:])
+        else:
+            UMI_length = 12
+
+        seq_list = []
+        quality = []
+        handle = f"{data_path}/{sample}.trimmed.pear.assembled.fastq"
+        for record in SeqIO.parse(handle, "fastq"):
+            seq_list.append(str(record.seq))
+            quality_tmp = record.letter_annotations["phred_quality"]
+            quality.append(quality_tmp)
+
+        df_seq = pd.DataFrame({"quality": quality, "Seq": seq_list})
+        df_seq["cell_bc"] = df_seq["Seq"].apply(lambda x: x[:UMI_length])
+        df_seq["cell_bc_quality_min"] = df_seq["quality"].apply(
+            lambda x: np.min(x[:UMI_length])
+        )
+        df_seq["cell_bc_quality_mean"] = df_seq["quality"].apply(
+            lambda x: np.mean(x[:UMI_length])
+        )
+        df_seq["library"] = sample
+        df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
+        df_seq["umi"] = ""
+        df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
+        df_seq["clone_id"] = df_seq["Seq"].apply(lambda x: x[UMI_length:])
+        df_seq["clone_id_quality_min"] = df_seq["quality"].apply(
+            lambda x: np.min(x[UMI_length:])
+        )
+        df_seq["clone_id_quality_mean"] = df_seq["quality"].apply(
+            lambda x: np.mean(x[UMI_length:])
+        )
+        df_seq.drop(["quality", "Seq"], axis=1)
+
+    return df_seq
 
 
 def CARLIN_preprocessing(
