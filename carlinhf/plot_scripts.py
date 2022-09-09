@@ -1500,6 +1500,7 @@ def single_cell_clonal_report(
     library_key="library",
     cell_bc_key="cell_bc",
     data_des="",
+    figure_dir="figure",
 ):
     """
     show overlap between 3 categorical groups specified at selection_key.
@@ -1536,7 +1537,7 @@ def single_cell_clonal_report(
         )
         plt.title(f"{cell_id_key} number")
         plt.tight_layout()
-        fig.savefig("{figure_dir}/venn_plot_allele_overlap_{data_des}.pdf")
+        fig.savefig(f"{figure_dir}/venn_plot_allele_overlap_{data_des}.pdf")
 
         print(
             f"""Total detected cells: {tot_cell_N}; {labels[0]} {cell_N[0]} ({cell_N[0]/tot_cell_N:.2f}); 
@@ -1570,8 +1571,9 @@ def single_cell_clonal_report(
         )
         plt.legend(loc=[1.01, 0.3])
         plt.ylabel("Cell number")
+        plt.xlabel("")
         plt.tight_layout()
-        fig.savefig("{figure_dir}/cell_coverage_{data_des}.pdf")
+        fig.savefig(f"{figure_dir}/cell_coverage_{data_des}.pdf")
 
 
 def visualize_sc_CARLIN_data(
@@ -1580,6 +1582,7 @@ def visualize_sc_CARLIN_data(
     plot_normalized_count=True,
     point_size=30,
     split_locus_read_CARLIN=False,
+    data_des=''
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -1597,6 +1600,7 @@ def visualize_sc_CARLIN_data(
     """
 
     df_sc_data = df_sc_data_input.copy()
+    os.makedirs('figure',exist_ok=True)
 
     locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa", "locus": "locus"}
     df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
@@ -1620,6 +1624,10 @@ def visualize_sc_CARLIN_data(
         hue_order=["Col", "Tigre", "Rosa"],
     )
     plt.legend(loc=[1.01, 0.3])
+    plt.xlabel('Cell number')
+    plt.ylabel('Clone number')
+    plt.tight_layout()
+    fig.savefig(f'figure/cell_clone_number_{data_des}.pdf')
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1631,6 +1639,10 @@ def visualize_sc_CARLIN_data(
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
+    plt.ylabel('Clone number')
+    plt.xlabel('')
+    plt.tight_layout()
+    fig.savefig(f'figure/clone_number_{data_des}.pdf')
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1642,9 +1654,13 @@ def visualize_sc_CARLIN_data(
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
+    plt.ylabel('Cell number')
+    plt.xlabel('')
+    plt.tight_layout()
+    fig.savefig(f'figure/cell_number_{data_des}.pdf')
 
     single_cell_clonal_report(
-        df_sc_data, labels=["Col", "Tigre", "Rosa"], selection_key="locus"
+        df_sc_data, labels=["Col", "Tigre", "Rosa"], selection_key="locus",data_des=data_des
     )
 
     if plot_read_CARLIN:
