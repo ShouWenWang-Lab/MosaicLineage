@@ -52,10 +52,12 @@ def mutation_statistics_box_plot(
         "Average insertion length",
         "(Insertion #)/(deletion #): per UMI",
     ],
+    figure_dir="figure",
 ):
     """
     df_noMerge: a
     """
+    os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     ## remove some negative controls
     if removed_sample is None:
@@ -80,11 +82,16 @@ def mutation_statistics_box_plot(
         ax.set_xlabel("")
         plt.xticks(rotation=90)
         plt.tight_layout()
-        fig.savefig(f"figure/{sample_key}/{key}_202105.pdf")
+        fig.savefig(f"{figure_dir}/{sample_key}/{key}_202105.pdf")
 
 
 def mutation_statistics_distribution_per_allele(
-    df_LL, df_SB, sample_key, label_1="CARLIN", label_2="ATCG-v1"
+    df_LL,
+    df_SB,
+    sample_key,
+    label_1="CARLIN",
+    label_2="ATCG-v1",
+    figure_dir="figure",
 ):
     """
     Compare mutation statistics per allele between two data source
@@ -93,7 +100,7 @@ def mutation_statistics_distribution_per_allele(
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
     """
-    os.makedirs(f"figure/{sample_key}", exist_ok=True)
+    os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
 
     ### Mutation event number per allele
     mut_per_allele_LL = lineage.mutations_per_allele(df_LL)
@@ -121,7 +128,7 @@ def mutation_statistics_distribution_per_allele(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
 
     ### Insertion event number per allele
     ins_per_allele_LL, del_per_allele_LL = lineage.mutations_per_allele_ins_del(df_LL)
@@ -148,7 +155,7 @@ def mutation_statistics_distribution_per_allele(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
 
     ### Deletion event number per allele
     del_LL_hist_y, del_LL_hist_x = np.histogram(del_per_allele_LL, bins=np.arange(15))
@@ -172,7 +179,7 @@ def mutation_statistics_distribution_per_allele(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
     ## Total insertion length per allele
     ins_per_allele_LL, del_per_allele_LL = lineage.mutations_length_per_allele_ins_del(
@@ -210,7 +217,9 @@ def mutation_statistics_distribution_per_allele(
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf"
+    )
 
     ## Single insertion length per allele
     ins_length_LL = []
@@ -243,7 +252,7 @@ def mutation_statistics_distribution_per_allele(
     plt.tight_layout()
     plotting.add_shade(ax)
     plt.savefig(
-        f"figure/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
     ## Total deletion length per allele
@@ -276,7 +285,9 @@ def mutation_statistics_distribution_per_allele(
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
 
     ## Single deletion length per allele
     del_length_LL = []
@@ -309,7 +320,7 @@ def mutation_statistics_distribution_per_allele(
     plotting.add_shade(ax)
     plt.tight_layout()
     plt.savefig(
-        f"figure/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
     ## Single deletion length
@@ -324,12 +335,15 @@ def mutation_statistics_distribution_per_allele(
     ax.set_ylabel("Cumulative deletion frequency")
     plt.tight_layout()
     plt.savefig(
-        f"figure/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
 
 def mutation_statistics_distribution_per_allele_single_input(
-    df_SB, sample_key, label="CARLIN"
+    df_SB,
+    sample_key,
+    label="CARLIN",
+    figure_dir="figure",
 ):
     """
     Check mutation statistics per allele from a single data source
@@ -337,7 +351,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
     """
-    os.makedirs(f"figure/{sample_key}", exist_ok=True)
+    os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
 
     ### Mutation event number per allele
     mut_per_allele_SB = lineage.mutations_per_allele(df_SB)
@@ -355,7 +369,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade_1(ax)
-    plt.savefig(f"figure/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
 
     ### Insertion event number per allele
     ins_per_allele_SB, del_per_allele_SB = lineage.mutations_per_allele_ins_del(df_SB)
@@ -370,7 +384,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade_1(ax)
-    plt.savefig(f"figure/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
 
     ### Deletion event number per allele
     del_SB_hist_y, del_SB_hist_x = np.histogram(del_per_allele_SB, bins=np.arange(15))
@@ -383,7 +397,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade_1(ax)
-    plt.savefig(f"figure/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
@@ -405,7 +419,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Distribution")
     plt.tight_layout()
     plotting.add_shade(ax, color=["#225ea8", "#d7301f"])
-    plt.savefig(f"figure/{sample_key}/ins_deletion_per_allele.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/ins_deletion_per_allele.pdf")
 
     ## Total insertion length per allele
     ins_per_allele_SB, del_per_allele_SB = lineage.mutations_length_per_allele_ins_del(
@@ -424,7 +438,9 @@ def mutation_statistics_distribution_per_allele_single_input(
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade_1(ax)
-    plt.savefig(f"figure/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf"
+    )
 
     ## Single insertion length per allele
     ins_length_SB = []
@@ -446,7 +462,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     plt.tight_layout()
     plotting.add_shade_1(ax)
     plt.savefig(
-        f"figure/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
     ## Total deletion length per allele
@@ -466,7 +482,9 @@ def mutation_statistics_distribution_per_allele_single_input(
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade_1(ax)
-    plt.savefig(f"figure/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf")
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
 
     ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
     ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
@@ -495,7 +513,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     plotting.add_shade_1(ax2, color="#d7301f")
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/tot_ins_del_length_per_allele.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/tot_ins_del_length_per_allele.pdf")
     rcParams["axes.spines.right"] = False
 
     ## Single deletion length per allele
@@ -518,7 +536,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     plotting.add_shade_1(ax)
     plt.tight_layout()
     plt.savefig(
-        f"figure/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
     ## Single deletion length
@@ -529,12 +547,17 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Cumulative deletion frequency")
     plt.tight_layout()
     plt.savefig(
-        f"figure/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
+        f"{figure_dir}/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
 
 
 def mutation_statistics_distribution_UMI(
-    df_LL, df_SB, sample_key, label_1="CARLIN", label_2="ATCG-v1"
+    df_LL,
+    df_SB,
+    sample_key,
+    label_1="CARLIN",
+    label_2="ATCG-v1",
+    figure_dir="figure",
 ):
     """
     Mutation statistics per UMI between two data source
@@ -543,7 +566,7 @@ def mutation_statistics_distribution_UMI(
     df_SB: allele count dataframe from Cas9 mouse
     sample_key: for making a separate folder and save the data
     """
-    os.makedirs(f"figure/{sample_key}", exist_ok=True)
+    os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
 
     df_SB = lineage.correct_null_allele_frequency(df_SB, editing_efficiency=0.3)
     ins_per_allele_LL, del_per_allele_LL = lineage.mutations_length_per_allele_ins_del(
@@ -590,7 +613,9 @@ def mutation_statistics_distribution_UMI(
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
-    plt.savefig(f"figure/{sample_key}/tot_ins_length_per_UMI_compare_cas9_Dntt.pdf")
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_ins_length_per_UMI_compare_cas9_Dntt.pdf"
+    )
 
 
 def allele_statistics_at_given_sampling_depth(
@@ -598,14 +623,15 @@ def allele_statistics_at_given_sampling_depth(
     sample_key,
     removed_sample=None,
     allele_cutoff=0,
-    color=None,
+    palette=None,
     legend=None,
+    figure_dir="figure",
 ):
 
     # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
     x_label_1 = "Observed cell # (called UMI)"
     x_label_2 = "Edited cell # (edited UMI)"
-    os.makedirs("figure/" + sample_key, exist_ok=True)
+    os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     ## Singleton fraction
     df_Merge_1 = df_Merge[df_Merge.total_alleles > allele_cutoff]
@@ -619,13 +645,15 @@ def allele_statistics_at_given_sampling_depth(
         y="singleton_ratio",
         hue="Design",
         ci=None,
-        palette="muted",
         height=4,
         aspect=1.2,
         robust=True,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
+        palette=palette,
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     g.ax.set_xlabel("Total observed alleles")
     g.ax.set_ylabel("Singleton fraction")
     g.ax.set_ylim([0, 1])
@@ -634,7 +662,7 @@ def allele_statistics_at_given_sampling_depth(
         ticks=[2, 3, 4, 5, 6],
         labels=[r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", r"$10^6$"],
     )
-    plt.savefig(f"figure/{sample_key}/Singleton_fraction.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/Singleton_fraction.pdf")
 
     ## remove some negative controls
     df_Merge_2 = remove_samples(df_Merge, removed_sample)
@@ -646,17 +674,19 @@ def allele_statistics_at_given_sampling_depth(
         y="total_alleles",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("Observed allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/total_allele_vs_eventful.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/total_allele_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_2,
@@ -664,17 +694,19 @@ def allele_statistics_at_given_sampling_depth(
         y="total_alleles",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("Observed allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/total_allele_vs_called.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/total_allele_vs_called.pdf")
 
     ## Observed singleton
     g = sns.lmplot(
@@ -683,17 +715,19 @@ def allele_statistics_at_given_sampling_depth(
         y="singleton",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("# of alleles observed only once")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/singleton_vs_eventful.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/singleton_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_2,
@@ -701,17 +735,19 @@ def allele_statistics_at_given_sampling_depth(
         y="singleton",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("# of alleles observed only once")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/singleton_vs_called.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/singleton_vs_called.pdf")
 
     ## Effective allele number
     df_Merge_3 = df_Merge_2[df_Merge_2.total_alleles > allele_cutoff]
@@ -721,18 +757,20 @@ def allele_statistics_at_given_sampling_depth(
         y="effective_allele_N",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
     g.ax.set_ylabel("Effective allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/effective_allele_vs_eventful.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/effective_allele_vs_eventful.pdf")
 
     g = sns.lmplot(
         data=df_Merge_3,
@@ -740,20 +778,22 @@ def allele_statistics_at_given_sampling_depth(
         y="effective_allele_N",
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         robust=False,
         lowess=False,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
     g.ax.set_ylabel("Effective allele number")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/effective_allele_vs_called.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/effective_allele_vs_called.pdf")
 
     ## Average deletion length over CARLIN potential
     x = "ave_del_len"
@@ -765,12 +805,14 @@ def allele_statistics_at_given_sampling_depth(
         y=y,
         hue="Design",
         ci=None,
-        palette="muted",
+        palette=palette,
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
+        legend=False,
     )
+    g.ax.legend(loc="best", title=None)
     # for i in range(len(df_temp)):
     #     plt.text(df_temp.iloc[i][x]+0.2, df_temp.iloc[i][y]+0.2, df_temp.iloc[i]['Tissue'])
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
@@ -778,15 +820,19 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel("Average deletion length")
     g.ax.set_ylabel("CARLIN potential by UMI")
     # plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/del_length_vs_CARLIN_potential.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/del_length_vs_CARLIN_potential.pdf")
 
 
-def insertion_del_freq_histogram(df, sample_key):
+def insertion_del_freq_histogram(
+    df,
+    sample_key,
+    figure_dir="figure",
+):
     """
     This is to test whether insertion contributes to more rare alleles than deletion
     """
 
-    os.makedirs("figure/" + sample_key, exist_ok=True)
+    os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
     df_mutation = lineage.mutation_frequency(df, plot=False)
     x_var, y_var = plotting.plot_loghist(
         list(df_mutation["UMI_count"]), cutoff_y=1, bins=20
@@ -822,7 +868,7 @@ def insertion_del_freq_histogram(df, sample_key):
     plt.xlabel(x_label)
     plt.ylabel("Histogram")
     plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/in_del_freq_histogram_log.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/in_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
     plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del")
@@ -831,7 +877,7 @@ def insertion_del_freq_histogram(df, sample_key):
     plt.xlabel(x_label)
     plt.ylabel("Histogram")
     plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/indel_del_freq_histogram_log.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/indel_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="del", marker="o")
@@ -850,7 +896,7 @@ def insertion_del_freq_histogram(df, sample_key):
     plt.tight_layout()
     plotting.add_shade(ax)
     plt.tight_layout()
-    plt.savefig(f"figure/{sample_key}/ins_del_freq_histogram_normal_scale.pdf")
+    plt.savefig(f"{figure_dir}/{sample_key}/ins_del_freq_histogram_normal_scale.pdf")
 
 
 def plot_deletion_statistics(df):
@@ -901,7 +947,8 @@ def plot_deletion_statistics(df):
 def three_locus_comparison_plots(
     df_all,
     sample_key,
-    tag_name="UMI",
+    tag_name="tag",
+    figure_dir="figure",
 ):
     """
     Comparing CC,TC,RC profiling, for both QC, and
@@ -910,6 +957,7 @@ def three_locus_comparison_plots(
     QC_metric and QC_x_label has one-to-one correspondence
     performance_metric and performance_x_label has one-to-one correspondence
     """
+    os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     QC_metric = [
         "tot_fastq_N",
@@ -972,9 +1020,7 @@ def three_locus_comparison_plots(
     temp = temp / np.sum(temp)
     df_all["Allele output per reads (normalized)"] = temp
 
-    df_all[f"{tag_name}_per_clone"] = (
-        df_all[f"{tag_name}_called"] / df_all["total_alleles"]
-    )
+    df_all[f"{tag_name}_per_clone"] = df_all[f"called"] / df_all["total_alleles"]
 
     for j, qc in enumerate(QC_metric):
         if qc in df_all.columns:
@@ -993,7 +1039,7 @@ def three_locus_comparison_plots(
             g.ax.set_title("QC")
             plt.xticks(rotation=90)
             # plt.xticks(rotation='vertical');
-            plt.savefig(f"figure/{sample_key}/{qc}.pdf")
+            plt.savefig(f"{figure_dir}/{sample_key}/{qc}.pdf")
         else:
             print(f"{qc} not found in df_all")
 
@@ -1014,7 +1060,7 @@ def three_locus_comparison_plots(
             g.ax.set_title("Performance")
             plt.xticks(rotation=90)
             # plt.xticks(rotation='vertical');
-            plt.savefig(f"figure/{sample_key}/{y}.pdf")
+            plt.savefig(f"{figure_dir}/{sample_key}/{y}.pdf")
         else:
             print(f"{y} not found in df_all")
 
@@ -1490,7 +1536,7 @@ def single_cell_clonal_report(
         )
         plt.title(f"{cell_id_key} number")
         plt.tight_layout()
-        fig.savefig("figure/venn_plot_allele_overlap_{data_des}.pdf")
+        fig.savefig("{figure_dir}/venn_plot_allele_overlap_{data_des}.pdf")
 
         print(
             f"""Total detected cells: {tot_cell_N}; {labels[0]} {cell_N[0]} ({cell_N[0]/tot_cell_N:.2f}); 
@@ -1525,7 +1571,7 @@ def single_cell_clonal_report(
         plt.legend(loc=[1.01, 0.3])
         plt.ylabel("Cell number")
         plt.tight_layout()
-        fig.savefig("figure/cell_coverage_{data_des}.pdf")
+        fig.savefig("{figure_dir}/cell_coverage_{data_des}.pdf")
 
 
 def visualize_sc_CARLIN_data(
