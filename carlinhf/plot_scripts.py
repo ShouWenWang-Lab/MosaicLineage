@@ -1,4 +1,5 @@
 import os
+from cProfile import label
 
 import cospar as cs
 import numpy as np
@@ -551,6 +552,321 @@ def mutation_statistics_distribution_per_allele_single_input(
     )
 
 
+def compute_mutation_statistics_distribution_per_allele(df_input):
+    """
+    Check mutation statistics per allele from a single data source
+    """
+    OUTPUT = {}
+
+    ### Mutation event number per allele
+    mut_per_allele_SB = lineage.mutations_per_allele(df_input)
+
+    mut_SB_hist_y, mut_SB_hist_x = np.histogram(mut_per_allele_SB, bins=np.arange(15))
+    mut_SB_hist_y = mut_SB_hist_y / np.sum(mut_SB_hist_y)
+    OUTPUT["mutation_event_number_per_allele"] = [mut_SB_hist_x[:-1], mut_SB_hist_y]
+
+    ### Insertion event number per allele
+    ins_per_allele_SB, del_per_allele_SB = lineage.mutations_per_allele_ins_del(
+        df_input
+    )
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_per_allele_SB, bins=np.arange(15))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+    OUTPUT["insertion_event_number_per_allele"] = [ins_SB_hist_x[:-1], ins_SB_hist_y]
+
+    ### Deletion event number per allele
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_per_allele_SB, bins=np.arange(15))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+    OUTPUT["deletion_event_number_per_allele"] = [del_SB_hist_x[:-1], del_SB_hist_y]
+
+    ## Total insertion length per allele
+    ins_per_allele_SB, del_per_allele_SB = lineage.mutations_length_per_allele_ins_del(
+        df_input
+    )
+    ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+    OUTPUT["total_insertion_length_per_allele"] = [ins_SB_hist_x[:-1], ins_SB_hist_y]
+
+    ## Single insertion length per allele
+    ins_length_SB = []
+    for x in ins_per_allele_SB:
+        ins_length_SB += list(x)
+
+    ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
+    ins_SB_hist_y = ins_SB_hist_y / np.sum(ins_SB_hist_y)
+    OUTPUT["single_insertion_length_per_allele"] = [ins_SB_hist_x[:-1], ins_SB_hist_y]
+
+    ## Total deletion length per allele
+    del_length_SB = [np.sum(x) for x in del_per_allele_SB]
+
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_length_SB, bins=np.arange(300))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+    OUTPUT["total_deletion_length_per_allele"] = [del_SB_hist_x[:-1], del_SB_hist_y]
+
+    ## Single deletion length per allele
+    del_length_SB = []
+    for x in del_per_allele_SB:
+        del_length_SB += list(x)
+
+    del_SB_hist_y, del_SB_hist_x = np.histogram(del_length_SB, bins=np.arange(300))
+    del_SB_hist_y = del_SB_hist_y / np.sum(del_SB_hist_y)
+    OUTPUT["single_deletion_length_per_allele"] = [del_SB_hist_x[:-1], del_SB_hist_y]
+    return OUTPUT
+
+
+def plot_mutation_statistics_distribution_per_allele(
+    OUTPUT_list,
+    label_list,
+    sample_key,
+    figure_dir="figure",
+    palette=None,
+    legend=None,
+):
+    """
+    Compare mutation statistics per allele between two data source
+
+    df_LL: allele count dataframe from Cas9-TdT mouse
+    df_SB: allele count dataframe from Cas9 mouse
+    sample_key: for making a separate folder and save the data
+    """
+    if len(OUTPUT_list) != len(label_list):
+        raise ValueError("OUTPUT_list length does not match label_list")
+
+    os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
+
+    def more_features(ax):
+        if len(label_list) == 2:
+            plotting.add_shade(ax)
+        elif len(label_list) == 1:
+            plotting.add_shade_1(ax)
+        plt.tight_layout()
+
+    ### Mutation event number per allele
+    fig, ax = plt.subplots()
+    key = "mutation_event_number_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        marker="o",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Mutation event # per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
+
+    ### Insertion event number per allele
+    fig, ax = plt.subplots()
+    key = "insertion_event_number_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        marker="o",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlim([-0.1, 10])
+    ax.set_xlabel("Insertion event # per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
+
+    ### Deletion event number per allele
+    fig, ax = plt.subplots()
+    key = "deletion_event_number_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        marker="o",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlabel("Deletion event # per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
+
+    ## Total insertion length per allele
+    fig, ax = plt.subplots()
+    key = "total_insertion_length_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlim([-0.1, 30])
+    ax.set_xlabel("Total insertion length per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Single insertion length per allele
+    fig, ax = plt.subplots()
+    key = "single_insertion_length_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlim([-0.1, 30])
+    ax.set_xlabel("Single insertion length per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Total deletion length per allele
+    fig, ax = plt.subplots()
+    key = "total_deletion_length_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlabel("Total deletion length per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Single deletion length per allele
+    fig, ax = plt.subplots()
+    key = "single_deletion_length_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlabel("Single deletion length per allele")
+    ax.set_ylabel("Distribution")
+    more_features(ax)
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+    ## Single deletion length
+    fig, ax = plt.subplots()
+    key = "single_deletion_length_per_allele"
+    tmp = {}
+    for j, OUTPUT in enumerate(OUTPUT_list):
+        tmp[label_list[j]] = OUTPUT[key][1]
+    df = (
+        pd.DataFrame(tmp, index=OUTPUT[key][0])
+        .melt(ignore_index=False)
+        .reset_index()
+        .rename(columns={"variable": ""})
+    )
+    ax = sns.lineplot(
+        data=df,
+        x="index",
+        y="value",
+        hue="",
+        ax=ax,
+        palette=palette,
+        legend=legend,
+    )
+    ax.set_xlabel("Single deletion length")
+    ax.set_ylabel("Cumulative deletion frequency")
+    more_features(ax)
+    plt.savefig(
+        f"{figure_dir}/{sample_key}/cumu_single_del_length_per_allele_compare_cas9_Dntt.pdf"
+    )
+
+
 def mutation_statistics_distribution_UMI(
     df_LL,
     df_SB,
@@ -651,9 +967,9 @@ def allele_statistics_at_given_sampling_depth(
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
         palette=palette,
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     g.ax.set_xlabel("Total observed alleles")
     g.ax.set_ylabel("Singleton fraction")
     g.ax.set_ylim([0, 1])
@@ -678,9 +994,9 @@ def allele_statistics_at_given_sampling_depth(
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
@@ -698,9 +1014,9 @@ def allele_statistics_at_given_sampling_depth(
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
@@ -719,9 +1035,9 @@ def allele_statistics_at_given_sampling_depth(
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
@@ -739,9 +1055,9 @@ def allele_statistics_at_given_sampling_depth(
         height=4,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
@@ -762,9 +1078,9 @@ def allele_statistics_at_given_sampling_depth(
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
@@ -785,9 +1101,9 @@ def allele_statistics_at_given_sampling_depth(
         lowess=False,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
@@ -810,9 +1126,9 @@ def allele_statistics_at_given_sampling_depth(
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
-        legend=False,
+        legend=legend,
     )
-    g.ax.legend(loc="best", title=None)
+    # g.ax.legend(loc="best", title=None)
     # for i in range(len(df_temp)):
     #     plt.text(df_temp.iloc[i][x]+0.2, df_temp.iloc[i][y]+0.2, df_temp.iloc[i]['Tissue'])
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
@@ -1060,7 +1376,7 @@ def three_locus_comparison_plots(
             g.ax.set_title("Performance")
             plt.xticks(rotation=90)
             # plt.xticks(rotation='vertical');
-            plt.savefig(f"{figure_dir}/{sample_key}/{y}.pdf")
+            plt.savefig(f"{figure_dir}/{sample_key}/{y}_bar.pdf")
         else:
             print(f"{y} not found in df_all")
 
@@ -1582,7 +1898,7 @@ def visualize_sc_CARLIN_data(
     plot_normalized_count=True,
     point_size=30,
     split_locus_read_CARLIN=False,
-    data_des=''
+    data_des="",
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -1600,7 +1916,7 @@ def visualize_sc_CARLIN_data(
     """
 
     df_sc_data = df_sc_data_input.copy()
-    os.makedirs('figure',exist_ok=True)
+    os.makedirs("figure", exist_ok=True)
 
     locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa", "locus": "locus"}
     df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
@@ -1624,10 +1940,10 @@ def visualize_sc_CARLIN_data(
         hue_order=["Col", "Tigre", "Rosa"],
     )
     plt.legend(loc=[1.01, 0.3])
-    plt.xlabel('Cell number')
-    plt.ylabel('Clone number')
+    plt.xlabel("Cell number")
+    plt.ylabel("Clone number")
     plt.tight_layout()
-    fig.savefig(f'figure/cell_clone_number_{data_des}.pdf')
+    fig.savefig(f"figure/cell_clone_number_{data_des}.pdf")
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1639,10 +1955,10 @@ def visualize_sc_CARLIN_data(
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
-    plt.ylabel('Clone number')
-    plt.xlabel('')
+    plt.ylabel("Clone number")
+    plt.xlabel("")
     plt.tight_layout()
-    fig.savefig(f'figure/clone_number_{data_des}.pdf')
+    fig.savefig(f"figure/clone_number_{data_des}.pdf")
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1654,13 +1970,16 @@ def visualize_sc_CARLIN_data(
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
-    plt.ylabel('Cell number')
-    plt.xlabel('')
+    plt.ylabel("Cell number")
+    plt.xlabel("")
     plt.tight_layout()
-    fig.savefig(f'figure/cell_number_{data_des}.pdf')
+    fig.savefig(f"figure/cell_number_{data_des}.pdf")
 
     single_cell_clonal_report(
-        df_sc_data, labels=["Col", "Tigre", "Rosa"], selection_key="locus",data_des=data_des
+        df_sc_data,
+        labels=["Col", "Tigre", "Rosa"],
+        selection_key="locus",
+        data_des=data_des,
     )
 
     if plot_read_CARLIN:
