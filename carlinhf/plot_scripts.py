@@ -1348,7 +1348,7 @@ def three_locus_comparison_plots(
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
-                hue_order=["Col", "Tigre", "Rosa"],
+                hue_order=["CC", "TC", "RC"],
             )
             g.ax.set_ylabel(QC_x_label[j])
             g.ax.set_xlabel("")
@@ -1369,7 +1369,7 @@ def three_locus_comparison_plots(
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
-                hue_order=["Col", "Tigre", "Rosa"],
+                hue_order=["CC", "TC", "RC"],
             )
             g.ax.set_ylabel(performance_x_label[j])
             g.ax.set_xlabel("")
@@ -1850,6 +1850,7 @@ def single_cell_clonal_report(
             df_list[1],
             df_list[2],
             labels=labels,
+            set_colors=('#3274A1','#E1812C','#3B923B'),
         )
         plt.title(f"{cell_id_key} number")
         plt.tight_layout()
@@ -1877,7 +1878,7 @@ def single_cell_clonal_report(
         ].plot(
             kind="bar",
             stacked=True,
-            color=sns.color_palette()
+            color=['#3274A1','#E1812C','#3B923B','#9467bd'],
             # color={
             #     ">1": "#9467bd",
             #     labels[0]: "#1f77b4",
@@ -1918,7 +1919,8 @@ def visualize_sc_CARLIN_data(
     df_sc_data = df_sc_data_input.copy()
     os.makedirs("figure", exist_ok=True)
 
-    locus_map = {"CC": "Col", "TC": "Tigre", "RC": "Rosa", "locus": "locus"}
+    #locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
+    locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
     df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
     df_plot = (
         df_sc_data.groupby(["locus", "library"])
@@ -1937,7 +1939,7 @@ def visualize_sc_CARLIN_data(
         x="cell_number",
         y="clone_number",
         hue="locus",
-        hue_order=["Col", "Tigre", "Rosa"],
+        hue_order=["CC", "TC", "RC"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xlabel("Cell number")
@@ -1951,7 +1953,7 @@ def visualize_sc_CARLIN_data(
         x="library",
         y="clone_number",
         hue="locus",
-        hue_order=["Col", "Tigre", "Rosa"],
+        hue_order=["CC", "TC", "RC"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
@@ -1966,7 +1968,7 @@ def visualize_sc_CARLIN_data(
         x="library",
         y="cell_number",
         hue="locus",
-        hue_order=["Col", "Tigre", "Rosa"],
+        hue_order=["CC", "TC", "RC"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
@@ -1977,7 +1979,7 @@ def visualize_sc_CARLIN_data(
 
     single_cell_clonal_report(
         df_sc_data,
-        labels=["Col", "Tigre", "Rosa"],
+        labels=["CC", "TC", "RC"],
         selection_key="locus",
         data_des=data_des,
     )
@@ -2005,7 +2007,7 @@ def visualize_sc_CARLIN_data(
                 x="read",
                 y="CARLIN_length",
                 hue="locus",
-                hue_order=["Col", "Tigre", "Rosa"],
+                hue_order=["CC", "TC", "RC"],
                 s=point_size,
             )
             plt.xscale("log")
@@ -2086,36 +2088,36 @@ def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
         df_input.filter(["RNA_id", "locus", fate])
         .drop_duplicates()
         .pivot(index="RNA_id", columns="locus", values=f"{fate}")
-        .rename(columns={"CC": "Col", "TC": "Tigre", "RC": "Rosa"})
+        .rename(columns={"CC": "CC", "TC": "TC", "RC": "RC"})
     ).reset_index()
     df_plot["source"] = df_plot["RNA_id"].apply(lambda x: x.split("_")[0])
-    df_plot_tmp = df_plot.filter(["Col", "Tigre", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["CC", "TC", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["Col"], std),
-        y=rand_jitter(df_plot_tmp["Tigre"], std),
+        x=rand_jitter(df_plot_tmp["CC"], std),
+        y=rand_jitter(df_plot_tmp["TC"], std),
         ax=axs[0],
         s=s,
         hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Col", "Rosa", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["CC", "RC", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["Col"], std),
-        y=rand_jitter(df_plot_tmp["Rosa"], std),
+        x=rand_jitter(df_plot_tmp["CC"], std),
+        y=rand_jitter(df_plot_tmp["RC"], std),
         ax=axs[1],
         s=s,
         hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["Tigre", "Rosa", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["TC", "RC", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["Tigre"], std),
-        y=rand_jitter(df_plot_tmp["Rosa"], std),
+        x=rand_jitter(df_plot_tmp["TC"], std),
+        y=rand_jitter(df_plot_tmp["RC"], std),
         ax=axs[2],
         s=s,
         hue="source",

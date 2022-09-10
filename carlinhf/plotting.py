@@ -94,7 +94,7 @@ def plot_pie_chart(
     plt.axis("equal")
 
 
-def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"]):
+def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"],set_colors=('#3274A1','#E1812C','#3B923B'),alpha=0.5):
 
     set_1 = set(data_1)
     set_2 = set(data_2)
@@ -112,8 +112,8 @@ def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"]):
     vd3 = venn3(
         [set_1, set_2, set_3],
         set_labels=labels,
-        set_colors=("#c4e6ff", "#F4ACB7", "#9D8189"),
-        alpha=0.8,
+        set_colors=set_colors,
+        alpha=alpha,
     )
     venn3_circles([set_1, set_2, set_3], linestyle="-", linewidth=0.5, color="grey")
     for text in vd3.set_labels:
