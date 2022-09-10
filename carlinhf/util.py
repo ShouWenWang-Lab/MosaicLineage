@@ -86,7 +86,7 @@ def onehot(input_dict):
 
 def reverse_compliment(seq):
     reverse = np.array(list(seq))[::-1]
-    map_seq = {"A": "T", "C": "G", "T": "A", "G": "C"}
+    map_seq = {"A": "T", "C": "G", "T": "A", "G": "C","N":"N"}
     complement = "".join([map_seq[x] for x in reverse])
     return complement
 

@@ -9,8 +9,10 @@ import yaml
 from Bio import SeqIO
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
+from Bio.Seq import Seq
 
 import carlinhf.analysis_script as analysis
+import carlinhf.util as util
 
 #########################################
 
@@ -103,9 +105,9 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
     """
     Load raw fastq files. This function will depend on what protocol is used.
     """
-    supported_protocol = ["scLimeCat", "sc10xV3"]
-    if not (protocol in supported_protocol):
-        raise ValueError(f"Only support protocols: {supported_protocol}")
+    # supported_protocol = ["scLimeCat", "sc10xV3"]
+    # if not (protocol in supported_protocol):
+    #     raise ValueError(f"Only support protocols: {supported_protocol}")
 
     if protocol.startswith("sc"):
         seq_list = []
@@ -193,14 +195,16 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
         df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
         df_seq["umi"] = ""
         df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
-        df_seq["clone_id"] = df_seq["Seq"].apply(lambda x: x[UMI_length:])
+        df_seq["clone_id"] = df_seq["Seq"].apply(lambda x: util.reverse_compliment(x[UMI_length:]))
         df_seq["clone_id_quality_min"] = df_seq["quality"].apply(
             lambda x: np.min(x[UMI_length:])
         )
         df_seq["clone_id_quality_mean"] = df_seq["quality"].apply(
             lambda x: np.mean(x[UMI_length:])
         )
-        df_seq.drop(["quality", "Seq"], axis=1)
+        df_seq=df_seq.drop(["quality", "Seq"], axis=1)
+    else:
+        raise ValueError('un supported cfg')
 
     return df_seq
 
@@ -262,7 +266,7 @@ def CARLIN_preprocessing(
         seq_3prime = seq_3prime[:seq_3prime_upper_N]
 
     df_output = df_input.copy()
-    df_output["Valid"] = df_output["Seq"].apply(
+    df_output["Valid"] = df_output["clone_id"].apply(
         lambda x: (seq_5prime in x) & (seq_3prime in x)
     )
     tot_fastq_N = len(df_output)
@@ -277,7 +281,7 @@ def CARLIN_preprocessing(
         valid_BC_N = len(df_output)
         print(f"Fastq with valid barcodes: {valid_BC_N} ({valid_BC_N/tot_fastq_N:.2f})")
 
-    df_output["clone_id"] = df_output["Seq"].apply(
+    df_output["clone_id"] = df_output["clone_id"].apply(
         lambda x: x.split(seq_5prime)[1].split(seq_3prime)[0]
     )
     df_output["unique_id"] = (
@@ -288,7 +292,7 @@ def CARLIN_preprocessing(
     )
     return (
         df_output.merge(df_tmp, on="unique_id")
-        .drop(["Valid", "Seq", "unique_id"], axis=1)
+        .drop(["Valid",  "unique_id"], axis=1)
         .drop_duplicates()
     )
 
