@@ -7,9 +7,9 @@ import scipy.sparse as ssp
 import seaborn as sns
 import yaml
 from Bio import SeqIO
+from Bio.Seq import Seq
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
-from Bio.Seq import Seq
 
 import carlinhf.analysis_script as analysis
 import carlinhf.util as util
@@ -195,16 +195,18 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
         df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
         df_seq["umi"] = ""
         df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
-        df_seq["clone_id"] = df_seq["Seq"].apply(lambda x: util.reverse_compliment(x[UMI_length:]))
+        df_seq["clone_id"] = df_seq["Seq"].apply(
+            lambda x: util.reverse_compliment(x[UMI_length:])
+        )
         df_seq["clone_id_quality_min"] = df_seq["quality"].apply(
             lambda x: np.min(x[UMI_length:])
         )
         df_seq["clone_id_quality_mean"] = df_seq["quality"].apply(
             lambda x: np.mean(x[UMI_length:])
         )
-        df_seq=df_seq.drop(["quality", "Seq"], axis=1)
+        df_seq = df_seq.drop(["quality", "Seq"], axis=1)
     else:
-        raise ValueError('un supported cfg')
+        raise ValueError("un supported cfg")
 
     return df_seq
 
@@ -292,7 +294,7 @@ def CARLIN_preprocessing(
     )
     return (
         df_output.merge(df_tmp, on="unique_id")
-        .drop(["Valid",  "unique_id"], axis=1)
+        .drop(["Valid", "unique_id"], axis=1)
         .drop_duplicates()
     )
 
@@ -440,9 +442,9 @@ def merge_three_locus(
     data_path_CC,
     data_path_RC,
     data_path_TC=None,
-    sample_type_CC="Col",
-    sample_type_TC="Rosa",
-    sample_type_RC="Tigre",
+    sample_type_CC="CC",
+    sample_type_TC="RC",
+    sample_type_RC="TC",
 ):
     """
     Merge the 3 locus (CC,TC,RC) according to the sample info and
