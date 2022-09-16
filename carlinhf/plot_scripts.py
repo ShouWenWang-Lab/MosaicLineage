@@ -945,8 +945,8 @@ def allele_statistics_at_given_sampling_depth(
 ):
 
     # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
-    x_label_1 = "Observed cell # (called UMI)"
-    x_label_2 = "Edited cell # (edited UMI)"
+    x_label_1 = "Observed cell #"
+    x_label_2 = "Edited cell #"
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     ## Singleton fraction
