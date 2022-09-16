@@ -1910,6 +1910,7 @@ def visualize_sc_CARLIN_data(
     point_size=30,
     split_locus_read_CARLIN=False,
     data_des="",
+    figure_dir='figure',
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -1927,7 +1928,7 @@ def visualize_sc_CARLIN_data(
     """
 
     df_sc_data = df_sc_data_input.copy()
-    os.makedirs("figure", exist_ok=True)
+    os.makedirs(figure_dir, exist_ok=True)
 
     # locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
     locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
@@ -1955,7 +1956,7 @@ def visualize_sc_CARLIN_data(
     plt.xlabel("Cell number")
     plt.ylabel("Clone number")
     plt.tight_layout()
-    fig.savefig(f"figure/cell_clone_number_{data_des}.pdf")
+    fig.savefig(f"{figure_dir}/cell_clone_number_{data_des}.pdf")
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1970,7 +1971,7 @@ def visualize_sc_CARLIN_data(
     plt.ylabel("Clone number")
     plt.xlabel("")
     plt.tight_layout()
-    fig.savefig(f"figure/clone_number_{data_des}.pdf")
+    fig.savefig(f"{figure_dir}/clone_number_{data_des}.pdf")
 
     fig, ax = plt.subplots()
     sns.barplot(
@@ -1985,13 +1986,14 @@ def visualize_sc_CARLIN_data(
     plt.ylabel("Cell number")
     plt.xlabel("")
     plt.tight_layout()
-    fig.savefig(f"figure/cell_number_{data_des}.pdf")
+    fig.savefig(f"{figure_dir}/cell_number_{data_des}.pdf")
 
     single_cell_clonal_report(
         df_sc_data,
         labels=["CC", "TC", "RC"],
         selection_key="locus",
         data_des=data_des,
+        figure_dir=figure_dir,
     )
 
     if plot_read_CARLIN:
