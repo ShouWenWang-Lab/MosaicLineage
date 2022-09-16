@@ -1399,6 +1399,8 @@ def analyze_cell_coupling_core(
     included_fates_mode="only",
     time_info=None,
     print_matrix=False,
+    figure_path="figure",
+    data_des="",
 ):
     """
     Given adata, analyze cell coupling in full.
@@ -1421,6 +1423,8 @@ def analyze_cell_coupling_core(
         # plt.yscale('log')
         plt.xlabel("Number of samples per clone")
         plt.ylabel("Histogram")
+        plt.tight_layout()
+        plt.savefig(f"{figure_path}/sample_number_{data_des}.pdf")
 
     # barcode heatmap
     adata_orig.uns["data_des"] = ["coarse"]
@@ -1437,6 +1441,8 @@ def analyze_cell_coupling_core(
     adata = lineage.generate_adata_from_X_clone(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names, time_info=time_info
     )
+    adata.uns["data_des"] = data_des
+    cs.settings.figure_path = figure_path
 
     if plot_barcodes_normalize:
         cs.pl.barcode_heatmap(
@@ -1508,6 +1514,8 @@ def analyze_cell_coupling_core(
         )
         plt.xticks(rotation="vertical")
         plt.ylabel("Clone number")
+        plt.tight_layout()
+        plt.savefig(f"{figure_path}/cell_number_{data_des}.pdf")
 
     if plot_hierarchy:
         # hierarchy
@@ -1572,6 +1580,8 @@ def analyze_cell_coupling_core(
             fig_width=1.2 * plt.rcParams["figure.figsize"][0],
         )
         ax.set_title("Pan-celltype correlation")
+        plt.tight_layout()
+        plt.savefig(f"{figure_path}/correlation_{data_des}.pdf")
 
     if plot_pie:
         fig, ax = plt.subplots(figsize=(5, 5))
@@ -1850,7 +1860,7 @@ def single_cell_clonal_report(
             df_list[1],
             df_list[2],
             labels=labels,
-            set_colors=('#3274A1','#E1812C','#3B923B'),
+            set_colors=("#3274A1", "#E1812C", "#3B923B"),
         )
         plt.title(f"{cell_id_key} number")
         plt.tight_layout()
@@ -1878,7 +1888,7 @@ def single_cell_clonal_report(
         ].plot(
             kind="bar",
             stacked=True,
-            color=['#3274A1','#E1812C','#3B923B','#9467bd'],
+            color=["#3274A1", "#E1812C", "#3B923B", "#9467bd"],
             # color={
             #     ">1": "#9467bd",
             #     labels[0]: "#1f77b4",
@@ -1919,7 +1929,7 @@ def visualize_sc_CARLIN_data(
     df_sc_data = df_sc_data_input.copy()
     os.makedirs("figure", exist_ok=True)
 
-    #locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
+    # locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
     locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
     df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
     df_plot = (
