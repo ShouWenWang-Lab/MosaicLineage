@@ -1441,7 +1441,7 @@ def analyze_cell_coupling_core(
     adata = lineage.generate_adata_from_X_clone(
         ssp.csr_matrix(coarse_X_clone), state_info=short_names, time_info=time_info
     )
-    adata.uns["data_des"] = data_des
+    adata.uns["data_des"] = [data_des]
     cs.settings.figure_path = figure_path
 
     if plot_barcodes_normalize:
@@ -1506,7 +1506,7 @@ def analyze_cell_coupling_core(
 
     if plot_cell_count:
         # cell count
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(plt.rcParams["figure.figsize"][0], 4))
         plt.bar(
             np.arange(coarse_X_clone.shape[0]),
             (coarse_X_clone > 0).sum(1),
@@ -1530,15 +1530,17 @@ def analyze_cell_coupling_core(
             normalize=True,
             selected_fates=short_names,
         )
-        cs.settings.set_figure_params(dpi=100, figsize=(5.5, 4.7))
         cs.pl.fate_coupling(
             adata,
             source="X_clone",
             vmin=0,
             order_map_x=order_map,
             order_map_y=order_map,
-            color_bar_label="Fate coupling (SW)",
+            color_bar_label="Fate coupling",
+            title=''
         )
+        plt.savefig(f"{figure_path}/fate_coupling_SW_{data_des}.pdf")
+        
         if print_matrix:
             print("SW coupling")
             print(adata.uns["fate_coupling_X_clone"]["X_coupling"])
@@ -1555,7 +1557,9 @@ def analyze_cell_coupling_core(
             color_bar_label="Fate coupling (Jaccard)",
             order_map_x=order_map,
             order_map_y=order_map,
+            title=''
         )
+        plt.savefig(f"{figure_path}/fate_coupling_Jaccard_{data_des}.pdf")
 
         if print_matrix:
             print("Jaccard")
@@ -1579,7 +1583,7 @@ def analyze_cell_coupling_core(
             fig_height=plt.rcParams["figure.figsize"][0],
             fig_width=1.2 * plt.rcParams["figure.figsize"][0],
         )
-        ax.set_title("Pan-celltype correlation")
+        ax.set_title("")
         plt.tight_layout()
         plt.savefig(f"{figure_path}/correlation_{data_des}.pdf")
 
