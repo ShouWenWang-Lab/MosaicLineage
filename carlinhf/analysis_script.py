@@ -83,6 +83,7 @@ def generate_allele_info_across_experiments(
     root_path="/Users/shouwenwang/Dropbox (HMS)/shared_folder_with_Li/DATA/CARLIN",
     mouse_label="LL",
     sample_map=None,
+    exclude_samples=[],
 ):
     """
     Merge a given set of experiments at given read_cutoff.
@@ -111,14 +112,14 @@ def generate_allele_info_across_experiments(
             if x == read_cutoff:
                 print(f"---{sample}: cutoff: {x}")
                 for sample_temp in SampleList:
+                    if sample_temp not in exclude_samples:
 
-                    input_dir = f"{data_path}/CARLIN/results_cutoff_override_{x}"
-
-                    df_allele = car.load_allele_frequency_statistics(
-                        input_dir, [sample_temp]
-                    )
-                    df_allele["sample"] = sample_temp
-                    df_list.append(df_allele)
+                        input_dir = f"{data_path}/CARLIN/results_cutoff_override_{x}"
+                        df_allele = car.load_allele_frequency_statistics(
+                            input_dir, [sample_temp]
+                        )
+                        df_allele["sample"] = sample_temp
+                        df_list.append(df_allele)
 
     df_merge = pd.concat(df_list, ignore_index=True)
     map_dict = {}
@@ -236,24 +237,20 @@ def load_and_annotate_sc_CARLIN_data(
     df_list = []
     for sample in SampleList:
         if sc_data_source == "SW":
-            file_path=f"{sc_root_path}/{sample}/called_barcodes_by_SW_method.csv"
+            file_path = f"{sc_root_path}/{sample}/called_barcodes_by_SW_method.csv"
             if os.path.exists(file_path):
-                df_sc_tmp = pd.read_csv(
-                    file_path
-                )
+                df_sc_tmp = pd.read_csv(file_path)
             else:
-                print(f'{file_path} does not exist. Skip!')
+                print(f"{file_path} does not exist. Skip!")
         else:
             print(
                 "load allele data identified with either original and new (SW) method"
             )
-            file_path=f"{sc_root_path}/{sample}/df_outer_joint.csv"
+            file_path = f"{sc_root_path}/{sample}/df_outer_joint.csv"
             if os.path.exists(file_path):
-                df_sc_tmp = pd.read_csv(
-                    file_path
-                )
+                df_sc_tmp = pd.read_csv(file_path)
             else:
-                print(f'{file_path} does not exist. Skip!')
+                print(f"{file_path} does not exist. Skip!")
         df_list.append(df_sc_tmp)
     df_sc_data = pd.concat(df_list, ignore_index=True)
 
@@ -594,96 +591,131 @@ def integrate_early_clone_and_fate(
 
 
 def estimate_error_rate(df):
-    df_plot = df.groupby(["cell_id"]).agg(
-        clone_measure_N=("clone_id", lambda x: len(x)),
-).reset_index()
-    df_sub=df[df['cell_id'].isin(df_plot[df_plot['clone_measure_N']>1]['cell_id'].to_list())
-               ].sort_values(['RNA_id','locus','read'],ascending=False).set_index(['RNA_id','locus'])
-    
-    error_rate=(df_sub.groupby(["cell_id"]).agg(
-        unique_allele_N=("allele", lambda x: len(set(x))),
-    ).reset_index()['unique_allele_N']>1).mean()
-    return pd.DataFrame({'>1_observation':[len(df_sub['cell_id'].unique())],'error_rate':[error_rate]}).set_index('error_rate')
+    df_plot = (
+        df.groupby(["cell_id"])
+        .agg(
+            clone_measure_N=("clone_id", lambda x: len(x)),
+        )
+        .reset_index()
+    )
+    df_sub = (
+        df[
+            df["cell_id"].isin(
+                df_plot[df_plot["clone_measure_N"] > 1]["cell_id"].to_list()
+            )
+        ]
+        .sort_values(["RNA_id", "locus", "read"], ascending=False)
+        .set_index(["RNA_id", "locus"])
+    )
 
+    error_rate = (
+        df_sub.groupby(["cell_id"])
+        .agg(
+            unique_allele_N=("allele", lambda x: len(set(x))),
+        )
+        .reset_index()["unique_allele_N"]
+        > 1
+    ).mean()
+    return pd.DataFrame(
+        {
+            ">1_observation": [len(df_sub["cell_id"].unique())],
+            "error_rate": [error_rate],
+        }
+    ).set_index("error_rate")
 
 
 def remove_self(df_series):
-    vec=df_series.values
-    cell_type=df_series.index
-    result=[]
-    cell_type=np.array(cell_type)
-    for j,x in enumerate(cell_type):
-        vec_tmp=vec.copy()
-        if (vec_tmp[j]==True): # & np.sum(vec_tmp)>1:
-            vec_tmp[j]=False
-            result_tmp=cell_type[vec_tmp]
-            if len(result_tmp)>1:
-                result.append('>1')
-            elif len(result_tmp)==1:
+    vec = df_series.values
+    cell_type = df_series.index
+    result = []
+    cell_type = np.array(cell_type)
+    for j, x in enumerate(cell_type):
+        vec_tmp = vec.copy()
+        if vec_tmp[j] == True:  # & np.sum(vec_tmp)>1:
+            vec_tmp[j] = False
+            result_tmp = cell_type[vec_tmp]
+            if len(result_tmp) > 1:
+                result.append(">1")
+            elif len(result_tmp) == 1:
                 result.append(result_tmp[0])
             else:
                 result.append(pd.NA)
-        else: #(vec_tmp[j]==True) & np.sum(vec_tmp)==1:
+        else:  # (vec_tmp[j]==True) & np.sum(vec_tmp)==1:
             result.append(pd.NA)
-            
-            
-    return pd.Series(result,index=cell_type)
 
-def extract_normalized_coarse_X_clone(adata_input,cell_type_key='cell_type',tissue_key='tissue',
-                                      selected_tissue=None,selected_celltype=None,min_clone_size=2,min_clone_N=8,
-                                     tissue_color_map=None):
-    adata=adata_input.copy()
-    adata.obs['state_info']=adata.obs[tissue_key].astype(str)+'_'+adata.obs[cell_type_key].astype(str)
+    return pd.Series(result, index=cell_type)
+
+
+def extract_normalized_coarse_X_clone(
+    adata_input,
+    cell_type_key="cell_type",
+    tissue_key="tissue",
+    selected_tissue=None,
+    selected_celltype=None,
+    min_clone_size=2,
+    min_clone_N=8,
+    tissue_color_map=None,
+):
+    adata = adata_input.copy()
+    adata.obs["state_info"] = (
+        adata.obs[tissue_key].astype(str) + "_" + adata.obs[cell_type_key].astype(str)
+    )
 
     # extract coarse-grained clonal matrix at t1, and perform cluster-then-clone-wise normalization
-    selected_fates=[]
+    selected_fates = []
     if selected_tissue is None:
-        selected_tissue=adata.obs[tissue_key].cat.categories
+        selected_tissue = adata.obs[tissue_key].cat.categories
     if selected_celltype is None:
-        selected_celltype=adata.obs[cell_type_key].cat.categories
-        
+        selected_celltype = adata.obs[cell_type_key].cat.categories
+
     for x in selected_tissue:
         for sel_lineage in selected_celltype:
-            tmp=f'{x}_{sel_lineage}'
-            if (adata.obs['state_info']==tmp).sum()>1:
+            tmp = f"{x}_{sel_lineage}"
+            if (adata.obs["state_info"] == tmp).sum() > 1:
                 selected_fates.append(tmp)
 
-    
-    cs.tl.filter_clones(adata,clone_size_threshold=min_clone_size,filter_larger_clones=False)
-    df_early_state=cs.tl.get_normalized_coarse_X_clone(adata,selected_fates)
+    cs.tl.filter_clones(
+        adata, clone_size_threshold=min_clone_size, filter_larger_clones=False
+    )
+    df_early_state = cs.tl.get_normalized_coarse_X_clone(adata, selected_fates)
 
-    coarse_X_clone=df_early_state.to_numpy()
-    coarse_X_clone=coarse_X_clone[:,coarse_X_clone.sum(0)>0]
+    coarse_X_clone = df_early_state.to_numpy()
+    coarse_X_clone = coarse_X_clone[:, coarse_X_clone.sum(0) > 0]
 
-
-    overlap_fraction_matrix={}
-    for k,x0 in enumerate(selected_fates):
-        tmp_vector=[]
-        for j,x1 in enumerate(selected_fates):
-            reference_id_list=[k]
-            ref=(coarse_X_clone[reference_id_list,:].sum(0)>0)
-            overlap_N=np.sum(ref*coarse_X_clone[j,:]>0)
-            total_N=np.sum(coarse_X_clone[j,:]>0)
-            if total_N>=min_clone_N:
-                frac=overlap_N/total_N
+    overlap_fraction_matrix = {}
+    for k, x0 in enumerate(selected_fates):
+        tmp_vector = []
+        for j, x1 in enumerate(selected_fates):
+            reference_id_list = [k]
+            ref = coarse_X_clone[reference_id_list, :].sum(0) > 0
+            overlap_N = np.sum(ref * coarse_X_clone[j, :] > 0)
+            total_N = np.sum(coarse_X_clone[j, :] > 0)
+            if total_N >= min_clone_N:
+                frac = overlap_N / total_N
             else:
-                frac=np.nan
+                frac = np.nan
 
             tmp_vector.append(frac)
-        overlap_fraction_matrix[x0]=tmp_vector
+        overlap_fraction_matrix[x0] = tmp_vector
 
-    df_overlap=pd.DataFrame(overlap_fraction_matrix,index=selected_fates).dropna()
-    
+    df_overlap = pd.DataFrame(overlap_fraction_matrix, index=selected_fates).dropna()
+
     ### extract df_clone
-    df_clone=pd.DataFrame({'clone_N':(coarse_X_clone>0).sum(1),'state':selected_fates,'tissue':[x.split('_')[0] for x in selected_fates]})
+    df_clone = pd.DataFrame(
+        {
+            "clone_N": (coarse_X_clone > 0).sum(1),
+            "state": selected_fates,
+            "tissue": [x.split("_")[0] for x in selected_fates],
+        }
+    )
     if tissue_color_map is not None:
-        df_clone['color']=df_clone['tissue'].map(tissue_color_map)
+        df_clone["color"] = df_clone["tissue"].map(tissue_color_map)
     else:
-        df_clone['color']='k'
-    cell_N=[]
+        df_clone["color"] = "k"
+    cell_N = []
     for x in selected_fates:
-        cell_N.append(np.sum(adata.obs['state_info']==x))
-    df_clone['cell_N']=cell_N
-    df_clone['cell_num/clone_num']=df_clone['cell_N']/df_clone['clone_N']
-    
+        cell_N.append(np.sum(adata.obs["state_info"] == x))
+    df_clone["cell_N"] = cell_N
+    df_clone["cell_num/clone_num"] = df_clone["cell_N"] / df_clone["clone_N"]
+
     return df_early_state.T, df_overlap, df_clone
