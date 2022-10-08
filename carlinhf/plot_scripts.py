@@ -1537,10 +1537,10 @@ def analyze_cell_coupling_core(
             order_map_x=order_map,
             order_map_y=order_map,
             color_bar_label="Fate coupling",
-            title=''
+            title="",
         )
         plt.savefig(f"{figure_path}/fate_coupling_SW_{data_des}.pdf")
-        
+
         if print_matrix:
             print("SW coupling")
             print(adata.uns["fate_coupling_X_clone"]["X_coupling"])
@@ -1557,7 +1557,7 @@ def analyze_cell_coupling_core(
             color_bar_label="Fate coupling (Jaccard)",
             order_map_x=order_map,
             order_map_y=order_map,
-            title=''
+            title="",
         )
         plt.savefig(f"{figure_path}/fate_coupling_Jaccard_{data_des}.pdf")
 
@@ -1914,7 +1914,7 @@ def visualize_sc_CARLIN_data(
     point_size=30,
     split_locus_read_CARLIN=False,
     data_des="",
-    figure_dir='figure',
+    figure_dir="figure",
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -2143,81 +2143,121 @@ def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
     plt.tight_layout()
     axs[1].set_title(fate)
 
-    
-def bar_plot_for_overlap(df_early_state,reference_id_list=None,ref_tissues=['LF'],data_des='',figsize=(8,4),tissue_color_map=None):
-    overlap_fraction={}
-    selected_fates=df_early_state.columns
-    coarse_X_clone=df_early_state.T.to_numpy()>0
+
+def bar_plot_for_overlap(
+    df_early_state,
+    reference_id_list=None,
+    ref_tissues=["LF"],
+    data_des="",
+    figsize=(8, 4),
+    tissue_color_map=None,
+):
+    overlap_fraction = {}
+    selected_fates = df_early_state.columns
+    coarse_X_clone = df_early_state.T.to_numpy() > 0
     if reference_id_list is None:
-        reference_id_list=[x for x in selected_fates if np.array([ref in x for ref in ref_tissues]).any()]
-    ref=(coarse_X_clone[np.in1d(selected_fates,reference_id_list),:].sum(0)>0)
-    for j,x in enumerate(selected_fates):
-        overlap_N=np.sum(ref*coarse_X_clone[j,:])
-        total_N=np.sum(coarse_X_clone[j,:])
-        frac=overlap_N/total_N
-        if np.sum(coarse_X_clone[j,:])>=5:
-            overlap_fraction[x]=[overlap_N,total_N,frac]
+        reference_id_list = [
+            x
+            for x in selected_fates
+            if np.array([ref in x for ref in ref_tissues]).any()
+        ]
+    ref = coarse_X_clone[np.in1d(selected_fates, reference_id_list), :].sum(0) > 0
+    for j, x in enumerate(selected_fates):
+        overlap_N = np.sum(ref * coarse_X_clone[j, :])
+        total_N = np.sum(coarse_X_clone[j, :])
+        frac = overlap_N / total_N
+        if np.sum(coarse_X_clone[j, :]) >= 5:
+            overlap_fraction[x] = [overlap_N, total_N, frac]
 
-    df=pd.DataFrame(overlap_fraction).T.reset_index().rename(columns={0:'overlap_clone',1:'total_clone',2:'overlap_fraction','index':'cell_type'})
-    df=df[~df['cell_type'].isin(reference_id_list)]
-    df['target_clone_N']=total_N
+    df = (
+        pd.DataFrame(overlap_fraction)
+        .T.reset_index()
+        .rename(
+            columns={
+                0: "overlap_clone",
+                1: "total_clone",
+                2: "overlap_fraction",
+                "index": "cell_type",
+            }
+        )
+    )
+    df = df[~df["cell_type"].isin(reference_id_list)]
+    df["target_clone_N"] = total_N
 
-    df['tissue']=df['cell_type'].apply(lambda x: x.split('_')[0])
+    df["tissue"] = df["cell_type"].apply(lambda x: x.split("_")[0])
     if tissue_color_map is not None:
-        colors=[tissue_color_map[x.split('_')[0]] for x in df['cell_type']]
+        colors = [tissue_color_map[x.split("_")[0]] for x in df["cell_type"]]
     else:
-        colors='k'
-    fig,ax=plt.subplots(figsize=figsize)
-    plt.bar(df['cell_type'],df['overlap_fraction'],color=colors)
-    #sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
-    plt.xticks(rotation=90);
-    plt.grid(True,axis='y')
-    plt.ylim([0,1])
-    plt.xlabel('')
-    plt.ylabel('Clone overlap fraction')
-    plt.title(f'Overlap fraction with {ref.sum()} {data_des} ref. clones')
+        colors = "k"
+    fig, ax = plt.subplots(figsize=figsize)
+    plt.bar(df["cell_type"], df["overlap_fraction"], color=colors)
+    # sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
+    plt.xticks(rotation=90)
+    plt.grid(True, axis="y")
+    plt.ylim([0, 1])
+    plt.xlabel("")
+    plt.ylabel("Clone overlap fraction")
+    plt.title(f"Overlap fraction with {ref.sum()} {data_des} ref. clones")
     return df
-    
-def bar_plot_for_inverse_overlap(df_early_state,target_id,reference_id_list,data_des='',figsize=(8,4),tissue_color_map=None):
-    overlap_fraction={}
-    all_fates=np.array(df_early_state.columns)
-    coarse_X_clone=df_early_state.T.to_numpy()>0
 
-    target_values=coarse_X_clone[np.in1d(all_fates,[target_id]),:].sum(0)>0
-    total_N=np.sum(target_values)
+
+def bar_plot_for_inverse_overlap(
+    df_early_state,
+    target_id,
+    reference_id_list,
+    data_des="",
+    figsize=(8, 4),
+    tissue_color_map=None,
+):
+    overlap_fraction = {}
+    all_fates = np.array(df_early_state.columns)
+    coarse_X_clone = df_early_state.T.to_numpy() > 0
+
+    target_values = coarse_X_clone[np.in1d(all_fates, [target_id]), :].sum(0) > 0
+    total_N = np.sum(target_values)
     for j, x in enumerate(reference_id_list):
         if type(x) is not list:
-            x=[x]
-        tmp_sel=np.in1d(all_fates,x)
-        ref=(coarse_X_clone[tmp_sel,:].sum(0)>0)
-        anno='_'.join(all_fates[tmp_sel])
-        
-        overlap_N=np.sum(ref*target_values)
-        frac=overlap_N/total_N
-        ref_clone_N=np.sum(ref)
-        overlap_fraction[anno]=[overlap_N,ref_clone_N,frac]  
+            x = [x]
+        tmp_sel = np.in1d(all_fates, x)
+        ref = coarse_X_clone[tmp_sel, :].sum(0) > 0
+        anno = "_".join(all_fates[tmp_sel])
 
-    df=pd.DataFrame(overlap_fraction).T.reset_index().rename(columns={0:'overlap_clone',1:'total_clone',2:'overlap_fraction','index':'cell_type'})
-    df['target_clone_N']=total_N
-    
-    df['tissue']=df['cell_type'].apply(lambda x: x.split('_')[0])
+        overlap_N = np.sum(ref * target_values)
+        frac = overlap_N / total_N
+        ref_clone_N = np.sum(ref)
+        overlap_fraction[anno] = [overlap_N, ref_clone_N, frac]
+
+    df = (
+        pd.DataFrame(overlap_fraction)
+        .T.reset_index()
+        .rename(
+            columns={
+                0: "overlap_clone",
+                1: "total_clone",
+                2: "overlap_fraction",
+                "index": "cell_type",
+            }
+        )
+    )
+    df["target_clone_N"] = total_N
+
+    df["tissue"] = df["cell_type"].apply(lambda x: x.split("_")[0])
     if tissue_color_map is not None:
-        colors=[tissue_color_map[x.split('_')[0]] for x in df['cell_type']]
+        colors = [tissue_color_map[x.split("_")[0]] for x in df["cell_type"]]
     else:
-        colors='k'
-    fig,ax=plt.subplots(figsize=figsize)
-    plt.bar(df['cell_type'],df['overlap_fraction'],color=colors)
-    #sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
-    plt.xticks(rotation=90);
-    plt.grid(True,axis='y')
-    plt.ylim([0,1])
-    plt.xlabel('')
-    plt.ylabel(f'Clone overlap fraction')
-    plt.title(f'Target cell type: {target_id}; {total_N} clones')
-    
-    
-    fig,ax=plt.subplots()
-    ax=sns.scatterplot(data=df,x='total_clone',y='overlap_fraction')
-    ax.set_xlabel('Reference clone number')
-    ax.set_ylabel('Overlap with target cell types')
+        colors = "k"
+    fig, ax = plt.subplots(figsize=figsize)
+    plt.bar(df["cell_type"], df["overlap_fraction"], color=colors)
+    # sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
+    plt.xticks(rotation=90)
+    plt.grid(True, axis="y")
+    plt.ylim([0, 1])
+    plt.xlabel("")
+    plt.ylabel(f"Clone overlap fraction")
+    plt.title(f"Target cell type: {target_id}; {total_N} clones")
+
+    fig, ax = plt.subplots()
+    ax = sns.scatterplot(data=df, x="total_clone", y="overlap_fraction")
+    ax.set_xlabel("Reference clone number")
+    ax.set_ylabel("Overlap with target cell types")
     return df
