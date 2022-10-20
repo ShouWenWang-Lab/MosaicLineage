@@ -588,3 +588,175 @@ def generate_sc_CARLIN_from_CARLIN_output(df_all):
     df_sc_CARLIN["lineage"] = df_merge["library"].apply(extract_lineage)
 
     return df_sc_CARLIN
+
+
+def assign_clone_id_by_integrating_locus(
+    df_sc_CARLIN,
+    prob_cutoff=0.1,
+    joint_allele_N_cutoff=6,
+    locus_list=["CC", "TC", "RC"],
+):
+
+    """
+    Integrate alleles from different locus to assign a common clone ID
+
+    Parameters
+    ----------
+        df_sc_CARLIN:
+            A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
+        prob_cutoff:
+            The probability cutoff to use an allele to establish strong connection between two CC-TC-RC clone IDs
+        joint_allele_N_cutoff:
+            An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
+            we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
+
+    Returns
+    -------
+        df_assigned_clones:
+            A dataframe, each entry gives the assigned clone_id and its relation to the detected CC-TC-RC joint allele
+        df_cells:
+            A dataframe for cells and their corresponding assgined clones
+    """
+
+    from tqdm import tqdm
+
+    # we are not working on mutations events within allele yet. So, we can use either 'allele' or 'clone_id'
+    clone_key = "allele"
+    locus_BC_names = [f"{x}_BC" for x in locus_list]
+    locus_prob_names = [f"{x}_prob" for x in locus_list]
+
+    ## extract the alleles, probabilities, and generate CC-TC-RC joint allele ID
+    df_1 = df_sc_CARLIN.pivot(
+        index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
+    )
+    dict_BC_tmp = {f"{locus}_BC": df_1[(clone_key, locus)] for locus in locus_list}
+    dict_prob_tmp = {
+        f"{locus}_prob": df_1[("normalized_count", locus)] for locus in locus_list
+    }
+    dict_BC_tmp.update(dict_prob_tmp)
+    df_cells = pd.DataFrame(dict_BC_tmp, index=df_1.index)
+    df_cells["joint_clone_id_tmp"] = [
+        "@".join(x) for x in df_cells[locus_BC_names].fillna("nan").to_numpy()
+    ]
+    df_allele = df_cells.drop_duplicates().reset_index(drop=True)
+
+    ## adjust the allele frequency to make sure that we do not have high-frequency alleles that can make connection to multiple unrelated alleles
+    allele_to_norm_count = dict(
+        zip(df_sc_CARLIN[clone_key], df_sc_CARLIN["normalized_count"])
+    )
+
+    def count_unique_bc(x):
+        return len(set(x.dropna()))
+
+    for locus in locus_list:
+        df_coupling = (
+            df_allele[
+                (~pd.isna(df_allele[f"{locus}_BC"]))
+                & (df_allele[f"{locus}_BC"] != f"{locus}_[]")
+            ]
+            .groupby(f"{locus}_BC")
+            .agg(joint_allele=("joint_clone_id_tmp", count_unique_bc))
+            .reset_index()
+        )
+        df_coupling["normalized_count"] = df_coupling[f"{locus}_BC"].map(
+            allele_to_norm_count
+        )
+        df_common = df_coupling[
+            (df_coupling["joint_allele"] >= joint_allele_N_cutoff)
+            & (df_coupling["normalized_count"] < prob_cutoff)
+        ]
+        df_common["normalized_count"] = prob_cutoff
+        allele_to_norm_count.update(
+            dict(zip(df_common[f"{locus}_BC"], df_common["normalized_count"]))
+        )
+
+    ## update the allele frequency in df_cells (contains RNA_id)
+    for locus in locus_list:
+        df_cells[f"{locus}_prob"] = df_cells[f"{locus}_BC"].map(allele_to_norm_count)
+    df_cells["joint_prob"] = [
+        np.prod(x) for x in df_cells[locus_prob_names].fillna(1).to_numpy()
+    ]
+
+    ## establish the allele connectivity (measured by probability) matrix for CC,TC,RC separately
+    prob_matrix_list = []
+    for locus in locus_list:
+        print(locus)
+        prob_matrix_tmp = np.ones((len(df_allele), len(df_allele)))
+        BC_index = (
+            df_allele[f"{locus}_BC"].dropna().index
+        )  # dropna before the calculate, so that if they are two alleles are different,
+        # they are really different. This is critical
+        BC_values = df_allele[f"{locus}_BC"].dropna().values
+        for i in tqdm(range(len(BC_index))):
+            same_idx = (
+                BC_values == BC_values[i]
+            )  # in the future, we can update this to not request exact match, but they share mutations
+            prob_matrix_tmp[BC_index[i], BC_index[same_idx]] = [
+                allele_to_norm_count[__] for __ in BC_values[same_idx]
+            ]
+            prob_matrix_tmp[BC_index[i], BC_index[~same_idx]] = np.nan
+
+        prob_matrix_list.append(prob_matrix_tmp)
+
+    ## calcualte the joint connectivity (probability) of the CC-TC-RC array
+    prob_matrix = prob_matrix_list[0]
+    for __ in range(1, len(locus_list)):
+        prob_matrix = prob_matrix * prob_matrix_list[__]  # multiply the 3 probability
+
+    ## convert the joint connectivity matrix to a binarized similarity matrix by thresholding
+    similarity_matrix = np.zeros((len(df_allele), len(df_allele)))
+    similarity_matrix[
+        prob_matrix < prob_cutoff
+    ] = 1  # strong connection by sharing rare alleles
+    similarity_matrix[prob_matrix >= prob_cutoff] = 0  # weak connection
+    similarity_matrix[np.isnan(prob_matrix)] = np.nan  # mismatch
+
+    ## partition the graph from the discretized similarity matrix into different components
+    from scipy.sparse.csgraph import connected_components
+
+    S_noNAN = np.nan_to_num(similarity_matrix)
+    n_components, labels = connected_components(S_noNAN, directed=False)
+
+    ## convert the classified clones into an annotated dataframe
+    df_assigned_clones = (
+        pd.DataFrame({"BC_id": np.arange(len(labels)), "clone_id": labels})
+        .groupby("clone_id")
+        .agg(
+            BC_id=("BC_id", lambda x: list(set(x))),
+            BC_num=("BC_id", lambda x: len(set(x))),
+        )
+    )
+
+    is_nan_list = []
+    for i in range(len(df_assigned_clones)):
+        BC_ids = df_assigned_clones.iloc[i]["BC_id"]
+        isnan = np.isnan(similarity_matrix[BC_ids][:, BC_ids]).sum()
+        is_nan_list.append(isnan)
+    df_assigned_clones["mismatch_num"] = is_nan_list
+
+    df_assigned_clones["allele_list"] = df_assigned_clones["BC_id"].apply(
+        lambda x: list(
+            df_allele.iloc[x].filter(locus_BC_names).melt()["value"].dropna().unique()
+        )
+    )
+    df_assigned_clones["allele_num"] = df_assigned_clones["allele_list"].apply(
+        lambda x: len(x)
+    )
+    df_assigned_clones["joint_clone_id_tmp_list"] = df_assigned_clones["BC_id"].apply(
+        lambda x: list(df_allele.iloc[x]["joint_clone_id_tmp"].unique())
+    )
+    df_assigned_clones["joint_clone_id"] = df_assigned_clones["allele_list"].apply(
+        lambda x: "@".join(x)
+    )
+
+    df_assigned_clones_2 = df_assigned_clones.explode("joint_clone_id_tmp_list")
+    df_cells["joint_clone_id"] = df_cells["joint_clone_id_tmp"].map(
+        dict(
+            zip(
+                df_assigned_clones_2["joint_clone_id_tmp_list"],
+                df_assigned_clones_2["joint_clone_id"],
+            )
+        )
+    )
+
+    return df_assigned_clones, df_cells
