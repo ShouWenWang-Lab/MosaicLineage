@@ -329,7 +329,12 @@ def merge_scCARLIN_to_bulk_CARLIN(
         )
         .fillna(0)
     )
-    df_merge_tmp["allele"] = f"{locus}_" + df_merge_tmp["allele"]
+    df_merge_tmp["allele"] = (
+        f"{locus}_"
+        + df_merge_tmp["allele"]
+        + "*"
+        + df_merge_tmp["sample"].apply(lambda x: x[:5])
+    )
     df_merge_tmp["source"] = "bulk"
     df_merge_tmp = df_merge_tmp[df_merge_tmp["clone_size"] >= min_clone_size]
 
