@@ -724,3 +724,209 @@ def extract_normalized_coarse_X_clone(
     df_clone["cell_num/clone_num"] = df_clone["cell_N"] / df_clone["clone_N"]
 
     return df_early_state.T, df_overlap, df_clone
+
+
+def annotate_adata_with_lineage_info(
+    adata, scCARLIN_data_des, joint_clone_key="joint_clone_id", annotate_t1t2=True
+):
+    adata.obs["mouse"] = (
+        adata.obs["library"]
+        .apply(lambda x: x.split("_RNA")[0])
+        .map(
+            {
+                "LL653E1P1": "LL653E1",
+                "LL653E1P2": "LL653E1",
+                "LL653E1P3": "LL653E1",
+                "LL653E6P1": "LL653E6",
+                "LL653E6P2": "LL653E6",
+                "LL719_P1": "LL719",
+                "LL719_P2": "LL719",
+                "LL731_P1": "LL731",
+                "LL731_P2": "LL731",
+                "LL731_P3": "LL731",
+                "LL744EP1": "LL744",
+                "LL744EP2": "LL744",
+                "LL749_4E": "LL749",
+            }
+        )
+    )
+
+    cs.pp.initialize_adata_object(adata)
+    adata.obs["tissue"] = pd.Categorical(adata.obs["tissue"]).set_categories(
+        ["AGM", "FL", "BM"], ordered=True
+    )
+    adata.uns["tissue_colors"] = ["#66c2a5", "#8da0cb", "#e78ac3"]
+
+    df_fate_matrix_with_sc = pd.read_csv(
+        f"data/{scCARLIN_data_des}_df_fate_matrix_with_sc.csv"
+    )
+    df_sc_data_joint_with_fate = pd.read_csv(
+        f"data/{scCARLIN_data_des}_df_sc_data_joint_with_fate.csv"
+    )
+    df_sc_data = pd.read_csv(f"data/{scCARLIN_data_des}_AGM_FL_BM_df_sc_data.csv")
+
+    BC_max_sample_count = 6
+    BC_max_freq = 0.1
+    read_cutoff = 3
+    min_fate_UMI_count = 3
+
+    df_sc_data_HQ = df_sc_data.assign(
+        HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
+        & (x["normalized_count"] <= BC_max_freq)
+        & (x["read"] >= read_cutoff)
+    ).query("HQ==True")
+
+    df_sc_data_HQ_joint_with_fate = df_sc_data_joint_with_fate.assign(
+        HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
+        & (x["normalized_count"] <= BC_max_freq)
+        & (x["read"] >= read_cutoff)
+        & (x["clone_size"] >= min_fate_UMI_count)
+    ).query("HQ==True")
+
+    print("df_sc_data_HQ_joint_with_fate:", len(df_sc_data_HQ_joint_with_fate))
+
+    cs.pp.get_X_clone(adata, df_sc_data_HQ["RNA_id"], df_sc_data_HQ[joint_clone_key])
+
+    if annotate_t1t2:
+        if joint_clone_key not in df_sc_data_HQ.columns:
+            df_sc_data_HQ = df_sc_data_HQ.reset_index()
+        df_clone_size = (
+            df_sc_data_HQ.groupby([joint_clone_key])
+            .agg(clone_size=("RNA_id", lambda x: len(set(x))))
+            .reset_index()
+        )
+        df_sc_data_HQ = df_sc_data_HQ.set_index(joint_clone_key)
+        df_sc_data_HQ["clone_size"] = df_clone_size.set_index(joint_clone_key)
+        df_sc_data_HQ = df_sc_data_HQ.reset_index()
+        clone_size_map = dict(
+            zip(df_clone_size[joint_clone_key], df_clone_size["clone_size"])
+        )
+
+        sel_RNA_id = df_sc_data_HQ[(df_sc_data_HQ["clone_size"] == 1)][
+            "RNA_id"
+        ].unique()
+        df_tmp = pd.DataFrame({"RNA_id": sel_RNA_id})
+        df_tmp["selection"] = 1
+        df_tmp = df_tmp.set_index("RNA_id")
+        adata.obs["clone_size=1"] = df_tmp
+        RNA_N_tmp = np.sum(adata.obs[f"clone_size=1"])
+        print(f"clone size 1 cells: {len(df_tmp)}, RNA number: {RNA_N_tmp}")
+
+        upper_size = 4
+        sel_RNA_id = df_sc_data_HQ[(df_sc_data_HQ["clone_size"] >= upper_size)][
+            "RNA_id"
+        ].unique()
+        df_tmp = pd.DataFrame({"RNA_id": sel_RNA_id})
+        df_tmp["selection"] = 1
+        df_tmp = df_tmp.set_index("RNA_id")
+        adata.obs[f"clone_size>={upper_size}"] = df_tmp
+        RNA_N_tmp = np.sum(adata.obs[f"clone_size>={upper_size}"])
+        print(
+            f"clone size >={upper_size} cells: {len(df_tmp)}; RNA number: {RNA_N_tmp}"
+        )
+
+        # # convert clone id at first time point to allele id at later time point
+        # RNA_alleles_tmp=[clone_to_allele_map[x] for x in adata.uns[joint_clone_key]]
+        # mapped_alleles=[ z for z in RNA_alleles_tmp if 'unmapped' not in z]
+        # df_mapped_normX=df_fate_matrix_merge.loc[mapped_alleles].reset_index().rename(columns={'index':'allele'}).merge(df_sc_data_HQ,on='allele',how='left')
+
+        for locus in ["CC", "TC", "RC"]:
+            adata.obs[f"{locus}_clone_id_t1"] = df_sc_data_HQ.filter(
+                ["RNA_id", "locus", joint_clone_key]
+            ).pivot(index="RNA_id", columns="locus", values=joint_clone_key)[locus]
+            adata.obs[f"{locus}_t1"] = (
+                ~pd.isna(adata.obs[f"{locus}_clone_id_t1"])
+            ).astype(int)
+            adata.obs[f"{locus}_clone_id_t1t2"] = (
+                df_sc_data_HQ_joint_with_fate.filter(
+                    ["RNA_id", "locus", joint_clone_key]
+                )
+                .drop_duplicates()
+                .pivot(index="RNA_id", columns="locus", values=joint_clone_key)[locus]
+            )
+            adata.obs[f"{locus}_t1t2"] = (
+                ~pd.isna(adata.obs[f"{locus}_clone_id_t1t2"])
+            ).astype(int)
+
+        adata.obs[f"merge_t1"] = np.max(
+            [
+                adata.obs[f"CC_t1"].to_numpy(),
+                adata.obs[f"TC_t1"].to_numpy(),
+                adata.obs[f"RC_t1"].to_numpy(),
+            ],
+            axis=0,
+        )
+        adata.obs[f"merge_t1t2"] = np.max(
+            [
+                adata.obs[f"CC_t1t2"].to_numpy(),
+                adata.obs[f"TC_t1t2"].to_numpy(),
+                adata.obs[f"RC_t1t2"].to_numpy(),
+            ],
+            axis=0,
+        )
+        adata.obs[f"merge_only_t1"] = (
+            (adata.obs[f"merge_t1t2"] == 0) & (adata.obs[f"merge_t1"] == 1)
+        ).astype(int)
+
+        for fate in ["Mega", "Gr", "B", "Mono", "Ery", "MPP3-4", "LK"]:
+            for locus in ["CC", "TC", "RC"]:
+                adata.obs[f"{locus}-{fate}"] = (
+                    df_sc_data_HQ_joint_with_fate.filter(["RNA_id", "locus", fate])
+                    .drop_duplicates()
+                    .pivot(index="RNA_id", columns="locus", values=f"{fate}")[locus]
+                )
+            adata.obs[f"merge-{fate}"] = np.nanmean(
+                [
+                    adata.obs[f"CC-{fate}"].to_numpy(),
+                    adata.obs[f"TC-{fate}"].to_numpy(),
+                    adata.obs[f"RC-{fate}"].to_numpy(),
+                ],
+                axis=0,
+            )
+
+        # convert the X_clone clone index to clone sequence and fate outcome
+        RNA_clone_id_to_fate = {}
+        for tmp_id in range(len(adata.uns["clone_id"])):
+            cur_clone_id = adata.uns["clone_id"][tmp_id]
+            if cur_clone_id in df_fate_matrix_with_sc[joint_clone_key].to_list():
+                fate_prop_tmp = df_fate_matrix_with_sc.set_index(joint_clone_key).loc[
+                    cur_clone_id
+                ]["fate_proportion"]
+                RNA_clone_id_to_fate[tmp_id] = [cur_clone_id, fate_prop_tmp]
+            else:
+                RNA_clone_id_to_fate[tmp_id] = [cur_clone_id, "nan"]
+
+        adata.uns["RNA_clone_id_to_fate"] = RNA_clone_id_to_fate
+
+        unique_clone_set_t1t2_tmp = set(
+            list(adata.obs["CC_clone_id_t1t2"])
+            + list(adata.obs["TC_clone_id_t1t2"])
+            + list(adata.obs["RC_clone_id_t1t2"])
+        )
+        unique_clone_set_t1t2 = [
+            x for x in unique_clone_set_t1t2_tmp if str(x) != "nan"
+        ]
+
+        unique_clone_set_t1_tmp = set(
+            list(adata.obs["CC_clone_id_t1"])
+            + list(adata.obs["TC_clone_id_t1"])
+            + list(adata.obs["RC_clone_id_t1"])
+        )
+        unique_clone_set_t1 = [x for x in unique_clone_set_t1_tmp if str(x) != "nan"]
+        print(
+            f"Unique clone number ------ t1: {len(unique_clone_set_t1)};  t1t2: {len(unique_clone_set_t1t2)}"
+        )
+
+        clonal_idx_t1 = (
+            adata.obs["CC_t1"] + adata.obs["TC_t1"] + adata.obs["RC_t1"]
+        ) > 0
+        t1_cell_N = np.sum(clonal_idx_t1)
+        clonal_idx_t1t2 = (
+            adata.obs["CC_t1t2"] + adata.obs["TC_t1t2"] + adata.obs["RC_t1t2"]
+        ) > 0
+        t1t2_cell_N = np.sum(clonal_idx_t1t2)
+        print(
+            f"Cells detected at least one CARLIN locus ----------  t1: {t1_cell_N};   t1t2: {t1t2_cell_N}"
+        )
+
+    return adata
