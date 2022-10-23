@@ -110,9 +110,22 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
     #     raise ValueError(f"Only support protocols: {supported_protocol}")
 
     if protocol.startswith("sc"):
+        if protocol == "scLimeCat":
+            bc_len = 8
+            umi_len = 8
+            tag_read='R2'
+            seq_read='R1'
+        elif protocol == "sc10xV3":
+            bc_len = 16
+            umi_len = 12
+            tag_read='R1'
+            seq_read='R2'
+        else:
+            raise ValueError(f"{protocol} must be among scLimeCat, sc10xV3")
+            
         seq_list = []
         seq_quality = []
-        with gzip.open(f"{data_path}/{sample}_L001_R2_001.fastq.gz", "rt") as handle:
+        with gzip.open(f"{data_path}/{sample}_L001_{seq_read}_001.fastq.gz", "rt") as handle:
             for record in SeqIO.parse(handle, "fastq"):
                 seq_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]
@@ -120,20 +133,11 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
 
         tag_list = []
         tag_quality = []
-        with gzip.open(f"{data_path}/{sample}_L001_R1_001.fastq.gz", "rt") as handle:
+        with gzip.open(f"{data_path}/{sample}_L001_{tag_read}_001.fastq.gz", "rt") as handle:
             for record in SeqIO.parse(handle, "fastq"):
                 tag_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]
                 tag_quality.append(quality_tmp)
-
-        if protocol == "scLimeCat":
-            bc_len = 8
-            umi_len = 8
-        elif protocol == "sc10xV3":
-            bc_len = 16
-            umi_len = 12
-        else:
-            raise ValueError(f"{protocol} must be among scLimeCat, sc10xV3")
 
         df_seq = pd.DataFrame(
             {
@@ -293,7 +297,8 @@ def CARLIN_preprocessing(
         df_output.groupby("unique_id").agg(read=("unique_id", "count")).reset_index()
     )
     return (
-        df_output.merge(df_tmp, on="unique_id")
+        df_output.filter(['cell_bc', 'library', 'cell_id', 'umi', 'umi_id', 
+                          'clone_id','unique_id','Valid']).merge(df_tmp, on="unique_id")
         .drop(["Valid", "unique_id"], axis=1)
         .drop_duplicates()
     )
@@ -994,10 +999,14 @@ def assign_clone_id_by_integrating_locus_v1(
     df_sc_CARLIN=df_sc_CARLIN.reset_index()
     return df_assigned_clones, df_sc_CARLIN, df_allele.filter(locus_BC_names+["joint_clone_id_tmp"])
 
-def filter_high_quality_clones(df_sc_CARLIN,joint_prob_cutoff=0.1,joint_allele_num_cutoff=6):
+def filter_high_quality_joint_clones(df_sc_CARLIN,joint_prob_cutoff=0.1,joint_allele_num_cutoff=6):
     #  return df_sc_CARLIN.assign(
     # HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
     # & (x["normalized_count"] <= BC_max_freq)
     # ).query("HQ==True")
     
     return df_sc_CARLIN[(df_sc_CARLIN['joint_prob']<joint_prob_cutoff) & (df_sc_CARLIN['joint_allele_num']<joint_allele_num_cutoff)]
+
+def filter_high_quality_single_alleles(df_data,normalized_count_cutoff=0.1,sample_count_cutoff=1):
+    
+    return df_data[(df_data['normalized_count']<normalized_count_cutoff) & (df_data["sample_count"]<=sample_count_cutoff)]
