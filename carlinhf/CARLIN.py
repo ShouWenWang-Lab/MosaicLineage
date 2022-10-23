@@ -600,6 +600,7 @@ def assign_clone_id_by_integrating_locus(
     prob_cutoff=0.1,
     joint_allele_N_cutoff=6,
     locus_list=["CC", "TC", "RC"],
+    clone_key = "allele"
 ):
 
     """
@@ -640,7 +641,6 @@ def assign_clone_id_by_integrating_locus(
     import scanpy as sc
 
     # we are not working on mutations events within allele yet. So, we can use either 'allele' or 'clone_id'
-    clone_key = "allele"
     locus_BC_names = [f"{x}_BC" for x in locus_list]
     locus_prob_names = [f"{x}_prob" for x in locus_list]
 
