@@ -782,6 +782,13 @@ def annotate_adata_with_lineage_info(
 
     cs.pp.get_X_clone(adata, df_sc_data_HQ["RNA_id"], df_sc_data_HQ[joint_clone_key])
 
+    adata.obs["joint_clone_id_tmp"] = df_sc_data.drop_duplicates(
+        subset="RNA_id"
+    ).set_index("RNA_id")["joint_clone_id_tmp"]
+    adata.obs["joint_clone_id"] = df_sc_data.drop_duplicates(subset="RNA_id").set_index(
+        "RNA_id"
+    )["joint_clone_id"]
+
     if annotate_t1t2:
         if joint_clone_key not in df_sc_data_HQ.columns:
             df_sc_data_HQ = df_sc_data_HQ.reset_index()
