@@ -724,27 +724,6 @@ def extract_normalized_coarse_X_clone(
 def annotate_adata_with_lineage_info(
     adata, scCARLIN_data_des, joint_clone_key="joint_clone_id", annotate_t1t2=True
 ):
-    adata.obs["mouse"] = (
-        adata.obs["library"]
-        .apply(lambda x: x.split("_RNA")[0])
-        .map(
-            {
-                "LL653E1P1": "LL653E1",
-                "LL653E1P2": "LL653E1",
-                "LL653E1P3": "LL653E1",
-                "LL653E6P1": "LL653E6",
-                "LL653E6P2": "LL653E6",
-                "LL719_P1": "LL719",
-                "LL719_P2": "LL719",
-                "LL731_P1": "LL731",
-                "LL731_P2": "LL731",
-                "LL731_P3": "LL731",
-                "LL744EP1": "LL744",
-                "LL744EP2": "LL744",
-                "LL749_4E": "LL749",
-            }
-        )
-    )
 
     cs.pp.initialize_adata_object(adata)
     adata.obs["tissue"] = pd.Categorical(adata.obs["tissue"]).set_categories(
@@ -760,9 +739,9 @@ def annotate_adata_with_lineage_info(
     )
     df_sc_data = pd.read_csv(f"data/{scCARLIN_data_des}_AGM_FL_BM_df_sc_data.csv")
 
-    BC_max_sample_count = 6
-    BC_max_freq = 0.1
-    read_cutoff = 3
+    BC_max_sample_count = 1
+    BC_max_freq = 0.02
+    read_cutoff = 5
     min_fate_UMI_count = 3
 
     df_sc_data_HQ = df_sc_data.assign(

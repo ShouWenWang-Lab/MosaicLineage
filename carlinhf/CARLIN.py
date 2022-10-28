@@ -596,8 +596,9 @@ def generate_sc_CARLIN_from_CARLIN_output(df_all):
 
 
 def assign_clone_id_by_integrating_locus(
-    df_sc_CARLIN,
+    df_sc_CARLIN_raw,
     prob_cutoff=0.1,
+    sample_count_cutoff=2,
     joint_allele_N_cutoff=6,
     locus_list=["CC", "TC", "RC"],
     clone_key = "allele"
@@ -609,7 +610,7 @@ def assign_clone_id_by_integrating_locus(
 
     Parameters
     ----------
-        df_sc_CARLIN:
+        df_sc_CARLIN_raw:
             A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
         prob_cutoff:
             The probability cutoff to use an allele to establish strong connection between two CC-TC-RC clone IDs
@@ -639,6 +640,9 @@ def assign_clone_id_by_integrating_locus(
 
     from tqdm import tqdm
     import scanpy as sc
+    
+    df_sc_CARLIN=df_sc_CARLIN_raw[(df_sc_CARLIN_raw['normalized_count']<prob_cutoff) & (df_sc_CARLIN_raw['sample_count']<sample_count_cutoff)]
+    print(f'renaming fraction after initial filtering (sample_count_cutoff={sample_count_cutoff}, prob_cutoff={prob_cutoff}): {len(df_sc_CARLIN)/len(df_sc_CARLIN_raw):.2f}')
 
     # we are not working on mutations events within allele yet. So, we can use either 'allele' or 'clone_id'
     locus_BC_names = [f"{x}_BC" for x in locus_list]
@@ -667,7 +671,16 @@ def assign_clone_id_by_integrating_locus(
     def count_unique_bc(x):
         return len(set(x.dropna()))
 
-    for locus in locus_list:
+    
+    # ## set alleles with more than sample_count_cutoff to have a high prob (does not seem to be useful here)
+    # df_allele_tmp=df_sc_CARLIN[(df_sc_CARLIN['sample_count']>=sample_count_cutoff) & (df_sc_CARLIN['normalized_count']>prob_cutoff)]
+    # df_allele_tmp['normalized_count']=prob_cutoff
+    # allele_to_norm_count.update(
+    #     dict(zip(df_allele_tmp[clone_key], df_allele_tmp["normalized_count"]))
+    # )
+    
+    ## set alleles with more than joint_allele_N_cutoff jointly detected alleles to have a high prob
+    for locus in locus_list:        
         df_coupling = (
             df_allele[
                 (~pd.isna(df_allele[f"{locus}_BC"]))
@@ -787,8 +800,9 @@ def assign_clone_id_by_integrating_locus(
     return df_assigned_clones, df_sc_CARLIN, df_allele.filter(locus_BC_names)
 
 def assign_clone_id_by_integrating_locus_v1(
-    df_sc_CARLIN,
+    df_sc_CARLIN_raw,
     prob_cutoff=0.1,
+    sample_count_cutoff=2,
     joint_allele_N_cutoff=6,
     locus_list=["CC", "TC", "RC"],
     consider_mutation=True
@@ -806,7 +820,9 @@ def assign_clone_id_by_integrating_locus_v1(
         df_sc_CARLIN:
             A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
         prob_cutoff:
-            The probability cutoff to use an allele to establish strong connection between two CC-TC-RC clone IDs
+            The probability cutoff (<) to use an allele to establish strong connection between two CC-TC-RC clone IDs
+        sample_count_cutoff:
+            Sample count cutoff (<) for an allele to be used to establish strong connection between two CC-TC-RC clone IDs
         joint_allele_N_cutoff:
             An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
             we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
@@ -833,6 +849,8 @@ def assign_clone_id_by_integrating_locus_v1(
 
     from tqdm import tqdm
     import scanpy as sc
+    df_sc_CARLIN=df_sc_CARLIN_raw[(df_sc_CARLIN_raw['normalized_count']<prob_cutoff) & (df_sc_CARLIN_raw['sample_count']<sample_count_cutoff)]
+    print(f'renaming fraction after initial filtering (sample_count_cutoff={sample_count_cutoff}, prob_cutoff={prob_cutoff}): {len(df_sc_CARLIN)/len(df_sc_CARLIN_raw):.2f}')
 
     # we are not working on mutations events within allele yet. So, we can use either 'allele' or 'clone_id'
     clone_key = "allele"
@@ -862,7 +880,16 @@ def assign_clone_id_by_integrating_locus_v1(
 
     def count_unique_bc(x):
         return len(set(x.dropna()))
+    
+    ## set alleles with more than sample_count_cutoff to have a high prob
+    df_allele_tmp=df_sc_CARLIN[df_sc_CARLIN['sample_count']>=sample_count_cutoff]
+    print(len(df_allele_tmp)/len(df_sc_CARLIN))
+    df_allele_tmp['normalized_count']=prob_cutoff
+    allele_to_norm_count.update(
+        dict(zip(df_allele_tmp[clone_key], df_allele_tmp["normalized_count"]))
+    )
 
+    ## set alleles with more than joint_allele_N_cutoff jointly detected alleles to have a high prob
     for locus in locus_list:
         df_coupling = (
             df_allele[
@@ -912,8 +939,8 @@ def assign_clone_id_by_integrating_locus_v1(
             column_key=f"{locus}_BC"
 
 
-        #kernel=lambda x: np.exp(-(x/0.1)**2)
-        kernel=lambda x: abs(np.log(x+10**(-4)))
+        kernel=lambda x: np.exp(-(x/0.1)**2)
+        #kernel=lambda x: abs(np.log(x+10**(-4)))
         df_tmp['value']=1
         df_tmp['transformed_connectivity']=df_tmp['prob'].apply(kernel)
         df_tmp=df_tmp.reset_index()
@@ -945,9 +972,12 @@ def assign_clone_id_by_integrating_locus_v1(
         #similarity_matrix_list.append(similarity_matrix_tmp)
 
     #similarity_matrix[similarity_matrix<kernel(prob_cutoff)]=0
-    similarity_matrix[similarity_matrix<kernel(prob_cutoff)]=0 # only consider positive weights for now
+    similarity_matrix_ps=similarity_matrix.copy()
+    similarity_matrix_ps[similarity_matrix_ps<kernel(prob_cutoff)]=0 # only consider positive weights for now
     
-    A=ssp.csr_matrix(similarity_matrix)
+    
+    ####### WARN: only consider positive weights for now 
+    A=ssp.csr_matrix(similarity_matrix_ps)  # only consider positive weights for now 
     adata=sc.AnnData(A)
     sc.tl.leiden(adata,adjacency=A,resolution=3)
 
@@ -957,6 +987,7 @@ def assign_clone_id_by_integrating_locus_v1(
         .agg(
             BC_id=("BC_id", lambda x: list(set(x))),
             BC_num=("BC_id", lambda x: len(set(x))),
+            BC_consistency=("BC_id",lambda x: similarity_matrix[x][:,x].mean())
         )
     )
 
@@ -994,8 +1025,10 @@ def assign_clone_id_by_integrating_locus_v1(
 
     df_sc_CARLIN=df_sc_CARLIN.set_index('RNA_id')
     df_sc_CARLIN['joint_clone_id']=df_cells['joint_clone_id']
+    df_sc_CARLIN['joint_clone_id_tmp']=df_cells['joint_clone_id_tmp']
     df_sc_CARLIN['joint_prob']=df_cells['joint_prob']
     df_sc_CARLIN['joint_allele_num']=df_sc_CARLIN['joint_clone_id'].map(dict(zip(df_assigned_clones['joint_clone_id'],df_assigned_clones['allele_num'])))
+    df_sc_CARLIN['BC_consistency']=df_sc_CARLIN['joint_clone_id'].map(dict(zip(df_assigned_clones['joint_clone_id'],df_assigned_clones['BC_consistency'])))
     df_sc_CARLIN=df_sc_CARLIN.reset_index()
     return df_assigned_clones, df_sc_CARLIN, df_allele.filter(locus_BC_names+["joint_clone_id_tmp"])
 
