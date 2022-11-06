@@ -722,7 +722,7 @@ def extract_normalized_coarse_X_clone(
 
 
 def annotate_adata_with_lineage_info(
-    adata, scCARLIN_data_des, joint_clone_key="joint_clone_id", annotate_t1t2=True
+    adata, scCARLIN_data_des, joint_clone_key="joint_clone_id", annotate_t1t2=True,BC_max_sample_count = 1,BC_max_freq = 0.02,read_cutoff = 5,min_fate_UMI_count = 3
 ):
 
     cs.pp.initialize_adata_object(adata)
@@ -739,10 +739,10 @@ def annotate_adata_with_lineage_info(
     )
     df_sc_data = pd.read_csv(f"data/{scCARLIN_data_des}_AGM_FL_BM_df_sc_data.csv")
 
-    BC_max_sample_count = 1
-    BC_max_freq = 0.02
-    read_cutoff = 5
-    min_fate_UMI_count = 3
+    
+    
+    
+    
 
     df_sc_data_HQ = df_sc_data.assign(
         HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)

@@ -1392,6 +1392,8 @@ def analyze_cell_coupling_core(
     plot_restricted=True,
     plot_cell_count=True,
     plot_hierarchy=True,
+    restricted_normalize=True,
+    plot_Jaccard=True,
     plot_pie=False,
     plot_correlation=True,
     order_map=False,
@@ -1401,6 +1403,7 @@ def analyze_cell_coupling_core(
     print_matrix=False,
     figure_path="figure",
     data_des="",
+    vmax=None,
 ):
     """
     Given adata, analyze cell coupling in full.
@@ -1478,10 +1481,11 @@ def analyze_cell_coupling_core(
                 ]
             else:
                 included_fates = short_names[: included_fates_N[j]]
+                
             lineage.conditional_heatmap(
                 coarse_X_clone,
                 short_names,
-                normalize=True,
+                normalize=restricted_normalize,
                 time_info=time_info,
                 mode="or",
                 included_fates=included_fates,
@@ -1489,16 +1493,6 @@ def analyze_cell_coupling_core(
                 fig_width=plt.rcParams["figure.figsize"][0],
             )
 
-            lineage.conditional_heatmap(
-                coarse_X_clone,
-                short_names,
-                binarize=True,
-                time_info=time_info,
-                mode="or",
-                included_fates=included_fates,
-                fig_height=1 * plt.rcParams["figure.figsize"][0],
-                fig_width=plt.rcParams["figure.figsize"][0],
-            )
 
     adata.obs_names = short_names
     adata.var_names = adata_orig.var_names
@@ -1534,17 +1528,21 @@ def analyze_cell_coupling_core(
             adata,
             source="X_clone",
             vmin=0,
+            vmax=vmax,
             order_map_x=order_map,
             order_map_y=order_map,
             color_bar_label="Fate coupling",
             title="",
         )
+        clone_N=adata.obsm['X_clone'].shape[1]
+        plt.title(f'{clone_N} clones')
         plt.savefig(f"{figure_path}/fate_coupling_SW_{data_des}.pdf")
 
         if print_matrix:
             print("SW coupling")
             print(adata.uns["fate_coupling_X_clone"]["X_coupling"])
 
+    if plot_Jaccard:
         # fate coupling
         cs.tl.fate_coupling(
             adata, method="Jaccard", source="X_clone", selected_fates=short_names
@@ -1554,6 +1552,7 @@ def analyze_cell_coupling_core(
             adata,
             source="X_clone",
             vmin=0,
+            vmax=vmax,
             color_bar_label="Fate coupling (Jaccard)",
             order_map_x=order_map,
             order_map_y=order_map,
@@ -1608,6 +1607,7 @@ def analyze_cell_coupling(
     plot_barcodes_normalize=True,
     plot_cell_count=True,
     plot_hierarchy=True,
+    plot_Jaccard=True,
     plot_pie=False,
     plot_correlation=True,
     order_map=False,
@@ -1616,6 +1616,7 @@ def analyze_cell_coupling(
     included_fates_N=[2],
     min_clone_size=2,
     print_matrix=False,
+    clone_id_key='clone_id',
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1706,7 +1707,7 @@ def analyze_cell_coupling(
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
     df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(df_HQ)
-    adata_orig = lineage.generate_adata_cell_by_allele(df_sc_CARLIN, min_clone_size=0)
+    adata_orig = lineage.generate_adata_cell_by_allele(df_sc_CARLIN, min_clone_size=0,clone_id_key=clone_id_key)
 
     # ordered_selected_fates = util.order_sample_by_fates(
     #     list(adata_orig.obs["state_info"].unique())
@@ -1723,6 +1724,7 @@ def analyze_cell_coupling(
         plot_barcodes_normalize=plot_barcodes_normalize,
         plot_cell_count=plot_cell_count,
         plot_hierarchy=plot_hierarchy,
+        plot_Jaccard=plot_Jaccard,
         plot_pie=plot_pie,
         plot_correlation=plot_correlation,
         order_map=order_map,
@@ -2177,20 +2179,20 @@ def bar_plot_for_overlap(
                 0: "overlap_clone",
                 1: "total_clone",
                 2: "overlap_fraction",
-                "index": "cell_type",
+                "index": "ref_cell_type",
             }
         )
     )
-    df = df[~df["cell_type"].isin(reference_id_list)]
+    df = df[~df["ref_cell_type"].isin(reference_id_list)]
     df["target_clone_N"] = total_N
 
-    df["tissue"] = df["cell_type"].apply(lambda x: x.split("_")[0])
+    df["tissue"] = df["ref_cell_type"].apply(lambda x: x.split("_")[0])
     if tissue_color_map is not None:
-        colors = [tissue_color_map[x.split("_")[0]] for x in df["cell_type"]]
+        colors = [tissue_color_map[x.split("_")[0]] for x in df["ref_cell_type"]]
     else:
         colors = "k"
     fig, ax = plt.subplots(figsize=figsize)
-    plt.bar(df["cell_type"], df["overlap_fraction"], color=colors)
+    plt.bar(df["ref_cell_type"], df["overlap_fraction"], color=colors)
     # sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
     plt.xticks(rotation=90)
     plt.grid(True, axis="y")
@@ -2208,6 +2210,7 @@ def bar_plot_for_inverse_overlap(
     data_des="",
     figsize=(8, 4),
     tissue_color_map=None,
+    plot=True,
 ):
     overlap_fraction = {}
     all_fates = np.array(df_early_state.columns)
@@ -2232,34 +2235,36 @@ def bar_plot_for_inverse_overlap(
         .T.reset_index()
         .rename(
             columns={
-                0: "overlap_clone",
-                1: "total_clone",
+                0: "overlap_clone_N",
+                1: "ref_clone_N",
                 2: "overlap_fraction",
-                "index": "cell_type",
+                "index": "ref_cell_type",
             }
         )
     )
     df["target_clone_N"] = total_N
 
-    df["tissue"] = df["cell_type"].apply(lambda x: x.split("_")[0])
+    #df["tissue"] = df["ref_cell_type"].apply(lambda x: x.split("_")[0])
     if tissue_color_map is not None:
-        colors = [tissue_color_map[x.split("_")[0]] for x in df["cell_type"]]
+        colors = [tissue_color_map[x.split("_")[0]] for x in df["ref_cell_type"]]
     else:
         colors = "k"
-    fig, ax = plt.subplots(figsize=figsize)
-    plt.bar(df["cell_type"], df["overlap_fraction"], color=colors)
-    # sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
-    plt.xticks(rotation=90)
-    plt.grid(True, axis="y")
-    plt.ylim([0, 1])
-    plt.xlabel("")
-    plt.ylabel(f"Clone overlap fraction")
-    plt.title(f"Target cell type: {target_id}; {total_N} clones")
+        
+    if plot:
+        fig, ax = plt.subplots(figsize=figsize)
+        plt.bar(df["ref_cell_type"], df["overlap_fraction"], color=colors)
+        # sns.barplot(data=df,x='cell_type',y='overlap_fraction',hue='tissue')
+        plt.xticks(rotation=90)
+        plt.grid(True, axis="y")
+        plt.ylim([0, 1])
+        plt.xlabel("")
+        plt.ylabel(f"Clone overlap fraction")
+        plt.title(f"Target cell type: {target_id}; {total_N} clones")
 
-    fig, ax = plt.subplots()
-    ax = sns.scatterplot(data=df, x="total_clone", y="overlap_fraction")
-    ax.set_xlabel("Reference clone number")
-    ax.set_ylabel("Overlap with target cell types")
+        fig, ax = plt.subplots()
+        ax = sns.scatterplot(data=df, x="ref_clone_N", y="overlap_fraction")
+        ax.set_xlabel("Reference clone number")
+        ax.set_ylabel("Overlap with target cell types")
     return df
 
 def plot_joint_allele_frequency(df_sc_CARLIN,clone_key='allele',figure_path=None):
