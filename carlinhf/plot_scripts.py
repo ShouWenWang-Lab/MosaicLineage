@@ -474,7 +474,7 @@ def mutation_statistics_distribution_per_allele_single_input(
 
     fig, ax = plt.subplots()
     ax = sns.lineplot(
-        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label, color="#d7301f"
     )  # ,marker='o')
 
     # ax.set_xlim([-0.1,30])
@@ -482,7 +482,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.set_ylabel("Distribution")
     # plt.xscale('log')
     plt.tight_layout()
-    plotting.add_shade_1(ax)
+    plotting.add_shade_1(ax, color="#d7301f")
     plt.savefig(
         f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
@@ -495,14 +495,14 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax.plot(
         ins_SB_hist_x[:-1],
         ins_SB_hist_y,
-        label="Ins",
+        label="Insertion",
         color="#225ea8",
     )  # ,marker='o')
     ax2 = plt.twinx()
     ax2.plot(
         del_SB_hist_x[:-1],
         del_SB_hist_y,
-        label="Del",
+        label="Deletion",
         color="#d7301f",
     )  # ,marker='o')
     ax.set_xlabel("Total mutation length per allele")
@@ -961,7 +961,7 @@ def allele_statistics_at_given_sampling_depth(
         y="singleton_ratio",
         hue="Design",
         ci=None,
-        height=4,
+        height=3.5,
         aspect=1.2,
         robust=True,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
@@ -991,7 +991,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         legend=legend,
@@ -1011,7 +1011,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         legend=legend,
@@ -1032,7 +1032,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         legend=legend,
@@ -1052,7 +1052,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         legend=legend,
@@ -1074,7 +1074,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
@@ -1095,7 +1095,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         robust=False,
         lowess=False,
@@ -1122,7 +1122,7 @@ def allele_statistics_at_given_sampling_depth(
         hue="Design",
         ci=None,
         palette=palette,
-        height=4,
+        height=3.5,
         aspect=1.2,
         scatter_kws={"s": 50, "alpha": 1, "edgecolor": "k"},
         line_kws={"linewidth": 2},
@@ -2267,40 +2267,69 @@ def bar_plot_for_inverse_overlap(
         ax.set_ylabel("Overlap with target cell types")
     return df
 
-def plot_joint_allele_frequency(df_sc_CARLIN,clone_key='allele',figure_path=None):
 
-    df_1=df_sc_CARLIN.pivot(index='RNA_id',columns='locus',values=[clone_key,'normalized_count'])
-    for (a,b) in [('CC','TC'),('CC','RC'),('RC','TC')]:
-        df_joint_locus=df_1[(~pd.isna(df_1[(clone_key,a)])) & (df_1[(clone_key,a)]!=f'{a}_[]')  & (~pd.isna(df_1[(clone_key,b)])) &  (df_1[(clone_key,b)]!=f'{b}_[]') ]
+def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=None):
 
-        fig,ax=plt.subplots(figsize=(4,3.5))
-        x=df_joint_locus[('normalized_count',a)].to_numpy().astype(float)
-        y=df_joint_locus[('normalized_count',b)].to_numpy().astype(float)
-        sns.scatterplot(x,y)
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlabel(f'{a}: expected allele freq.')
-        plt.ylabel(f'{b}: expected allele freq.')
-        R=np.corrcoef(x,y)[0,1]
-        plt.title(f'R={R:.2f}')
+    df_1 = df_sc_CARLIN.pivot(
+        index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
+    )
+    for (a, b) in [("CC", "TC"), ("CC", "RC"), ("RC", "TC")]:
+        df_joint_locus = df_1[
+            (~pd.isna(df_1[(clone_key, a)]))
+            & (df_1[(clone_key, a)] != f"{a}_[]")
+            & (~pd.isna(df_1[(clone_key, b)]))
+            & (df_1[(clone_key, b)] != f"{b}_[]")
+        ]
+
+        fig, ax = plt.subplots(figsize=(4, 3.5))
+        x = df_joint_locus[("normalized_count", a)].to_numpy().astype(float)
+        y = df_joint_locus[("normalized_count", b)].to_numpy().astype(float)
+        sns.scatterplot(x, y)
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.xlabel(f"{a}: expected allele freq.")
+        plt.ylabel(f"{b}: expected allele freq.")
+        R = np.corrcoef(x, y)[0, 1]
+        plt.title(f"R={R:.2f}")
         plt.tight_layout()
         if figure_path is not None:
-            plt.savefig(f'{figure_path}/{a}_{b}_independence_allel_freq_1.pdf')
-            
+            plt.savefig(f"{figure_path}/{a}_{b}_independence_allel_freq_1.pdf")
 
-def plot_co_dtected_allele_number(df_sc_CARLIN,clone_key='allele'):
-    df_1=df_sc_CARLIN.pivot(index='RNA_id',columns='locus',values=[clone_key,'normalized_count'])
-    df_2=pd.DataFrame({'CC_BC':df_1[(clone_key,'CC')],'TC_BC':df_1[(clone_key,'TC')],'RC_BC':df_1[(clone_key,'RC')],
-                       'CC_prob':df_1[('normalized_count','CC')],'TC_prob':df_1[('normalized_count','TC')],'RC_prob':df_1[('normalized_count','RC')]},index=df_1.index)
-    df_2['joint_clone_id_tmp']=df_2['CC_BC'].astype(str)+'@'+df_2['TC_BC'].astype(str)+'@'+df_2['RC_BC'].astype(str)
-    df_2['joint_prob_tmp']=df_2['CC_prob'].fillna(1)*df_2['TC_prob'].fillna(1)*df_2['RC_prob'].fillna(1)
 
-    df_allele=df_2.drop_duplicates().reset_index(drop=True)
+def plot_co_dtected_allele_number(df_sc_CARLIN, clone_key="allele"):
+    df_1 = df_sc_CARLIN.pivot(
+        index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
+    )
+    df_2 = pd.DataFrame(
+        {
+            "CC_BC": df_1[(clone_key, "CC")],
+            "TC_BC": df_1[(clone_key, "TC")],
+            "RC_BC": df_1[(clone_key, "RC")],
+            "CC_prob": df_1[("normalized_count", "CC")],
+            "TC_prob": df_1[("normalized_count", "TC")],
+            "RC_prob": df_1[("normalized_count", "RC")],
+        },
+        index=df_1.index,
+    )
+    df_2["joint_clone_id_tmp"] = (
+        df_2["CC_BC"].astype(str)
+        + "@"
+        + df_2["TC_BC"].astype(str)
+        + "@"
+        + df_2["RC_BC"].astype(str)
+    )
+    df_2["joint_prob_tmp"] = (
+        df_2["CC_prob"].fillna(1)
+        * df_2["TC_prob"].fillna(1)
+        * df_2["RC_prob"].fillna(1)
+    )
+
+    df_allele = df_2.drop_duplicates().reset_index(drop=True)
 
     def count_unique_bc(x):
         return len(set(x.dropna()))
 
-    for locus in ['CC','TC','RC']:
+    for locus in ["CC", "TC", "RC"]:
         df_coupling = (
             df_allele[
                 (~pd.isna(df_allele[f"{locus}_BC"]))
@@ -2311,9 +2340,9 @@ def plot_co_dtected_allele_number(df_sc_CARLIN,clone_key='allele'):
             .reset_index()
         )
 
-        fig,ax=plt.subplots(figsize=(4,3.5))
-        sns.histplot(df_coupling['joint_allele'])
-        plt.xlabel(f'# of distinct BCs with a shared {locus}')
-        plt.xlim([0,10])
-        N_10=np.sum(df_coupling['joint_allele']>10)
-        plt.title(f'{locus} -- (>10 num= {N_10})')
+        fig, ax = plt.subplots(figsize=(4, 3.5))
+        sns.histplot(df_coupling["joint_allele"])
+        plt.xlabel(f"# of distinct BCs with a shared {locus}")
+        plt.xlim([0, 10])
+        N_10 = np.sum(df_coupling["joint_allele"] > 10)
+        plt.title(f"{locus} -- (>10 num= {N_10})")
