@@ -726,10 +726,10 @@ def annotate_adata_with_lineage_info(
 ):
 
     cs.pp.initialize_adata_object(adata)
-    adata.obs["tissue"] = pd.Categorical(adata.obs["tissue"]).set_categories(
-        ["AGM", "FL", "BM"], ordered=True
-    )
-    adata.uns["tissue_colors"] = ["#66c2a5", "#8da0cb", "#e78ac3"]
+    # adata.obs["tissue"] = pd.Categorical(adata.obs["tissue"]).set_categories(
+    #     ["AGM", "FL", "BM"], ordered=True
+    # )
+    # adata.uns["tissue_colors"] = ["#66c2a5", "#8da0cb", "#e78ac3"]
 
     df_fate_matrix_with_sc = pd.read_csv(
         f"data/{scCARLIN_data_des}_df_fate_matrix_with_sc.csv"

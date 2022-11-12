@@ -2275,12 +2275,12 @@ def bar_plot_for_inverse_overlap(
     return df
 
 
-def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=None):
+def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=None,**kwargs):
 
     df_1 = df_sc_CARLIN.pivot(
         index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
     )
-    for (a, b) in [("CC", "TC"), ("CC", "RC"), ("RC", "TC")]:
+    for (a, b) in [("CC", "TC"), ("CC", "RC"), ("TC", "RC")]:
         df_joint_locus = df_1[
             (~pd.isna(df_1[(clone_key, a)]))
             & (df_1[(clone_key, a)] != f"{a}_[]")
@@ -2291,11 +2291,11 @@ def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=No
         fig, ax = plt.subplots(figsize=(4, 3.5))
         x = df_joint_locus[("normalized_count", a)].to_numpy().astype(float)
         y = df_joint_locus[("normalized_count", b)].to_numpy().astype(float)
-        sns.scatterplot(x, y)
-        plt.xscale("log")
-        plt.yscale("log")
-        plt.xlabel(f"{a}: expected allele freq.")
-        plt.ylabel(f"{b}: expected allele freq.")
+        sns.scatterplot(x, y,**kwargs)
+        #plt.xscale("log")
+        #plt.yscale("log")
+        plt.xlabel(f"{a}: allele frequency")
+        plt.ylabel(f"{b}: allele frequency")
         R = np.corrcoef(x, y)[0, 1]
         plt.title(f"R={R:.2f}")
         plt.tight_layout()
