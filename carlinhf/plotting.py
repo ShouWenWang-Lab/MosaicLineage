@@ -94,7 +94,15 @@ def plot_pie_chart(
     plt.axis("equal")
 
 
-def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"],set_colors=('#3274A1','#E1812C','#3B923B'),alpha=0.5):
+def plot_venn3(
+    data_1,
+    data_2,
+    data_3,
+    labels=["1", "2", "3"],
+    set_colors=("#3274A1", "#E1812C", "#3B923B"),
+    alpha=0.5,
+    text_font_size=16,
+):
 
     set_1 = set(data_1)
     set_2 = set(data_2)
@@ -118,13 +126,13 @@ def plot_venn3(data_1, data_2, data_3, labels=["1", "2", "3"],set_colors=('#3274
     venn3_circles([set_1, set_2, set_3], linestyle="-", linewidth=0.5, color="grey")
     for text in vd3.set_labels:
         if text != None:
-            text.set_fontsize(16)
+            text.set_fontsize(text_font_size)
     for text in vd3.subset_labels:
         if text != None:
-            text.set_fontsize(16)
+            text.set_fontsize(text_font_size)
 
 
-def plot_venn2(data_1, data_2, labels=["1", "2"],set_colors=("#c4e6ff", "#F4ACB7")):
+def plot_venn2(data_1, data_2, labels=["1", "2"], set_colors=("#c4e6ff", "#F4ACB7")):
 
     set_1 = set(data_1)
     set_2 = set(data_2)

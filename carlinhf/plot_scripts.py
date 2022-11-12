@@ -51,9 +51,11 @@ def mutation_statistics_box_plot(
     y_labels=[
         "Average deletion length",
         "Average insertion length",
-        "(Insertion #)/(deletion #): per UMI",
+        "(Insertion #)/(deletion #)",  #: per UMI
     ],
     figure_dir="figure",
+    figsize=(3, 4),
+    rotation=90,
 ):
     """
     df_noMerge: a
@@ -68,7 +70,7 @@ def mutation_statistics_box_plot(
     df_noM_new = remove_samples(df, removed_sample)
 
     for j, key in enumerate(keys):
-        fig, ax = plt.subplots(figsize=(3, 4))
+        fig, ax = plt.subplots(figsize=figsize)
         ax = sns.boxplot(data=df_noM_new, x="Design", y=key, width=0.5)
         ax = sns.stripplot(
             data=df_noM_new,
@@ -81,7 +83,7 @@ def mutation_statistics_box_plot(
         )
         ax.set_ylabel(y_labels[j])
         ax.set_xlabel("")
-        plt.xticks(rotation=90)
+        plt.xticks(rotation=rotation)
         plt.tight_layout()
         fig.savefig(f"{figure_dir}/{sample_key}/{key}_202105.pdf")
 
@@ -478,8 +480,10 @@ def mutation_statistics_distribution_per_allele_single_input(
     )  # ,marker='o')
 
     # ax.set_xlim([-0.1,30])
+    plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     ax.set_xlabel("Total deletion length per allele")
     ax.set_ylabel("Distribution")
+    plt.xlim([0, 300])
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade_1(ax, color="#d7301f")
@@ -1177,7 +1181,7 @@ def insertion_del_freq_histogram(
     )
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only")
     plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="ins")
     plt.loglog(x_var_indel[:-1], y_var_indel, "-o", label="indel")
     plt.legend()
@@ -1187,7 +1191,7 @@ def insertion_del_freq_histogram(
     plt.savefig(f"{figure_dir}/{sample_key}/in_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only")
     plt.loglog(x_var_ins[:-1], y_var_ins + y_var_indel, "-o", label="ins+indel")
     plt.legend()
     plt.xlabel(x_label)
@@ -1196,7 +1200,7 @@ def insertion_del_freq_histogram(
     plt.savefig(f"{figure_dir}/{sample_key}/indel_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
-    ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="del", marker="o")
+    ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="del. only", marker="o")
     ax = sns.lineplot(
         x=x_var_del[:-1],
         y=y_var_ins + y_var_indel,
@@ -1481,7 +1485,7 @@ def analyze_cell_coupling_core(
                 ]
             else:
                 included_fates = short_names[: included_fates_N[j]]
-                
+
             lineage.conditional_heatmap(
                 coarse_X_clone,
                 short_names,
@@ -1492,7 +1496,6 @@ def analyze_cell_coupling_core(
                 fig_height=1 * plt.rcParams["figure.figsize"][0],
                 fig_width=plt.rcParams["figure.figsize"][0],
             )
-
 
     adata.obs_names = short_names
     adata.var_names = adata_orig.var_names
@@ -1534,8 +1537,8 @@ def analyze_cell_coupling_core(
             color_bar_label="Fate coupling",
             title="",
         )
-        clone_N=adata.obsm['X_clone'].shape[1]
-        plt.title(f'{clone_N} clones')
+        clone_N = adata.obsm["X_clone"].shape[1]
+        plt.title(f"{clone_N} clones")
         plt.savefig(f"{figure_path}/fate_coupling_SW_{data_des}.pdf")
 
         if print_matrix:
@@ -1616,7 +1619,7 @@ def analyze_cell_coupling(
     included_fates_N=[2],
     min_clone_size=2,
     print_matrix=False,
-    clone_id_key='clone_id',
+    clone_id_key="clone_id",
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1707,7 +1710,11 @@ def analyze_cell_coupling(
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
     df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(df_HQ)
-    adata_orig = lineage.generate_adata_cell_by_allele(df_sc_CARLIN, min_clone_size=0,clone_id_key=clone_id_key)
+    print(df_sc_CARLIN.shape)
+    adata_orig = lineage.generate_adata_cell_by_allele(
+        df_sc_CARLIN, min_clone_size=0, clone_id_key=clone_id_key
+    )
+    print(adata_orig.shape)
 
     # ordered_selected_fates = util.order_sample_by_fates(
     #     list(adata_orig.obs["state_info"].unique())
@@ -2244,12 +2251,12 @@ def bar_plot_for_inverse_overlap(
     )
     df["target_clone_N"] = total_N
 
-    #df["tissue"] = df["ref_cell_type"].apply(lambda x: x.split("_")[0])
+    # df["tissue"] = df["ref_cell_type"].apply(lambda x: x.split("_")[0])
     if tissue_color_map is not None:
         colors = [tissue_color_map[x.split("_")[0]] for x in df["ref_cell_type"]]
     else:
         colors = "k"
-        
+
     if plot:
         fig, ax = plt.subplots(figsize=figsize)
         plt.bar(df["ref_cell_type"], df["overlap_fraction"], color=colors)
