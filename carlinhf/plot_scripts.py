@@ -977,11 +977,18 @@ def allele_statistics_at_given_sampling_depth(
     g.ax.set_xlabel("Total observed alleles")
     g.ax.set_ylabel("Singleton fraction")
     g.ax.set_ylim([0, 1])
-    g.ax.set_xlim([2, 6])
-    plt.xticks(
-        ticks=[2, 3, 4, 5, 6],
-        labels=[r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", r"$10^6$"],
-    )
+    if df_Merge_1["total_alleles"].max() > 5:
+        g.ax.set_xlim([2, 6])
+        plt.xticks(
+            ticks=[2, 3, 4, 5, 6],
+            labels=[r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$", r"$10^6$"],
+        )
+    else:
+        g.ax.set_xlim([2, 5])
+        plt.xticks(
+            ticks=[2, 3, 4, 5],
+            labels=[r"$10^2$", r"$10^3$", r"$10^4$", r"$10^5$"],
+        )
     plt.savefig(f"{figure_dir}/{sample_key}/Singleton_fraction.pdf")
 
     ## remove some negative controls
@@ -1318,7 +1325,7 @@ def three_locus_comparison_plots(
         "Allele output per reads (normalized)",
     ]
     performance_x_label = [
-        f"Edited cell fraction (edited {tag_name} fraction)",
+        f"Edited cell fraction",
         "Total allele number",
         "Singleton number",
         "Singleton fraction",
@@ -1356,7 +1363,7 @@ def three_locus_comparison_plots(
             )
             g.ax.set_ylabel(QC_x_label[j])
             g.ax.set_xlabel("")
-            g.ax.set_title("QC")
+            # g.ax.set_title("QC")
             plt.xticks(rotation=90)
             # plt.xticks(rotation='vertical');
             plt.savefig(f"{figure_dir}/{sample_key}/{qc}.pdf")
@@ -1377,7 +1384,7 @@ def three_locus_comparison_plots(
             )
             g.ax.set_ylabel(performance_x_label[j])
             g.ax.set_xlabel("")
-            g.ax.set_title("Performance")
+            # g.ax.set_title("Performance")
             plt.xticks(rotation=90)
             # plt.xticks(rotation='vertical');
             plt.savefig(f"{figure_dir}/{sample_key}/{y}_bar.pdf")
@@ -2275,7 +2282,9 @@ def bar_plot_for_inverse_overlap(
     return df
 
 
-def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=None,**kwargs):
+def plot_joint_allele_frequency(
+    df_sc_CARLIN, clone_key="allele", figure_path=None, **kwargs
+):
 
     df_1 = df_sc_CARLIN.pivot(
         index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
@@ -2291,9 +2300,9 @@ def plot_joint_allele_frequency(df_sc_CARLIN, clone_key="allele", figure_path=No
         fig, ax = plt.subplots(figsize=(4, 3.5))
         x = df_joint_locus[("normalized_count", a)].to_numpy().astype(float)
         y = df_joint_locus[("normalized_count", b)].to_numpy().astype(float)
-        sns.scatterplot(x, y,**kwargs)
-        #plt.xscale("log")
-        #plt.yscale("log")
+        sns.scatterplot(x, y, **kwargs)
+        # plt.xscale("log")
+        # plt.yscale("log")
         plt.xlabel(f"{a}: allele frequency")
         plt.ylabel(f"{b}: allele frequency")
         R = np.corrcoef(x, y)[0, 1]

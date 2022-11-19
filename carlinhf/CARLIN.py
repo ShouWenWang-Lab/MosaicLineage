@@ -533,24 +533,46 @@ def merge_three_locus(
     return df_all, df_sample_association
 
 
-def extract_lineage(x):
+def extract_lineage(x, scenario="LL"):
     """
     We expect the structure like 'LL731-LF-B'
     """
-    x = "-".join(x.split("-")[:3])  # keep at most 3 entries
-    if ("MPP3" in x) and ("MPP3-4" not in x):
-        return "MPP3-4".join(x.split("MPP3"))
+    if scenario == "LL":
+        x = "-".join(x.split("-")[:3])  # keep at most 3 entries
+        if ("MPP3" in x) and ("MPP3-4" not in x):
+            return "MPP3-4".join(x.split("MPP3"))
+        else:
+            return x
     else:
         return x
 
 
-def rename_lib(x):
-    # this is for CARLIN data
-    if "_S" in x:
-        x = x.split("_S")[0]  # remve _SX at the end of the lib name
+def rename_lib(x, scenario="LL"):
+    if scenario == "LL":
+        # this is for CARLIN data
+        if "_S" in x:
+            x = "_".join(x.split("_")[:-1])  # remve _SX at the end of the lib name
 
-    if ("CC" in x) or ("TC" in x) or ("RC" in x):
-        return x[:-3]
+        if (
+            ("-CC" in x)
+            or ("-TC" in x)
+            or ("-RC" in x)
+            or ("_CC" in x)
+            or ("_TC" in x)
+            or ("_RC" in x)
+        ):
+            return x[:-3]
+        elif (
+            ("CC-" in x)
+            or ("TC-" in x)
+            or ("RC-" in x)
+            or ("CC_" in x)
+            or ("TC_" in x)
+            or ("RC_" in x)
+        ):
+            return x[2:]
+        else:
+            return x
     else:
         return x
 
