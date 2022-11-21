@@ -1466,7 +1466,7 @@ def analyze_cell_coupling_core(
             order_map_x=False,
             order_map_y=False,
             fig_height=1.3 * plt.rcParams["figure.figsize"][0],
-            fig_width=plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][1],
         )
 
     if plot_barcodes_binary:
@@ -1477,7 +1477,7 @@ def analyze_cell_coupling_core(
             order_map_x=False,
             order_map_y=False,
             fig_height=1.3 * plt.rcParams["figure.figsize"][0],
-            fig_width=plt.rcParams["figure.figsize"][0],
+            fig_width=plt.rcParams["figure.figsize"][1],
         )
 
     if plot_restricted:
@@ -1500,8 +1500,8 @@ def analyze_cell_coupling_core(
                 time_info=time_info,
                 mode="or",
                 included_fates=included_fates,
-                fig_height=1 * plt.rcParams["figure.figsize"][0],
-                fig_width=plt.rcParams["figure.figsize"][0],
+                fig_height=1.3 * plt.rcParams["figure.figsize"][0],
+                fig_width=plt.rcParams["figure.figsize"][1],
             )
 
     adata.obs_names = short_names
@@ -1541,7 +1541,7 @@ def analyze_cell_coupling_core(
             vmax=vmax,
             order_map_x=order_map,
             order_map_y=order_map,
-            color_bar_label="Fate coupling",
+            color_bar_label="Clonal coupling",
             title="",
         )
         clone_N = adata.obsm["X_clone"].shape[1]
@@ -1563,7 +1563,7 @@ def analyze_cell_coupling_core(
             source="X_clone",
             vmin=0,
             vmax=vmax,
-            color_bar_label="Fate coupling (Jaccard)",
+            color_bar_label="Clonal coupling (Jaccard)",
             order_map_x=order_map,
             order_map_y=order_map,
             title="",
@@ -1628,6 +1628,7 @@ def analyze_cell_coupling(
     print_matrix=False,
     clone_id_key="clone_id",
     sample_name_format="LL",
+    verbose=False,
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1665,7 +1666,7 @@ def analyze_cell_coupling(
             car.rename_lib(x, sample_name_format=sample_name_format),
             sample_name_format=sample_name_format,
         )
-
+    
     print(f"Apply minimum clone size {min_clone_size}")
     selected_fates = []
     short_names_mock = []
@@ -1681,6 +1682,8 @@ def analyze_cell_coupling(
             short_names_mock.append(custom_rename_lib(x))
             Flat_SampleList.append(x)
 
+    if verbose:
+        print('selected fates',selected_fates)
     if short_names is None:
         short_names = short_names_mock
 
@@ -1725,14 +1728,25 @@ def analyze_cell_coupling(
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
+    if verbose:
+        print('------df_HQ-------')
+        display(df_HQ)
+        
     df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(
         df_HQ, sample_name_format=sample_name_format
     )
-    print(df_sc_CARLIN.shape)
+    if verbose:
+        print(df_sc_CARLIN.shape)
+        print('------df_sc_CARLIN-------')
+        display(df_sc_CARLIN)
+        
     adata_orig = lineage.generate_adata_cell_by_allele(
         df_sc_CARLIN, min_clone_size=0, clone_id_key=clone_id_key
     )
-    print(adata_orig.shape)
+    
+    if verbose:
+        print(adata_orig.shape)
+        print('adata_orig state info',adata_orig.obs['state_info'])
 
     # ordered_selected_fates = util.order_sample_by_fates(
     #     list(adata_orig.obs["state_info"].unique())
@@ -2318,8 +2332,8 @@ def plot_joint_allele_frequency(
         sns.scatterplot(x, y, **kwargs)
         # plt.xscale("log")
         # plt.yscale("log")
-        plt.xlabel(f"{a}: allele frequency")
-        plt.ylabel(f"{b}: allele frequency")
+        plt.xlabel(f"{a}: homoplasy prob.")
+        plt.ylabel(f"{b}: homoplasy prob.")
         R = np.corrcoef(x, y)[0, 1]
         plt.title(f"R={R:.2f}")
         plt.tight_layout()

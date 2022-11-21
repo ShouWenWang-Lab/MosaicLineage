@@ -636,7 +636,7 @@ def generate_sc_CARLIN_from_CARLIN_output(df_all, sample_name_format="LL"):
         .reset_index(drop=True)
         .rename(columns={"CB": "cell_bc", "CARLIN": "clone_id"})
     )
-    df_sc_CARLIN = add_metadata(df_merge)
+    df_sc_CARLIN = add_metadata(df_merge,sample_name_format=sample_name_format)
 
     def custom_extract_lineage(x):
         return extract_lineage(x, sample_name_format=sample_name_format)
