@@ -368,6 +368,7 @@ def load_allele_frequency_statistics(data_path: str, SampleList: list):
 def extract_CARLIN_info(
     data_path,
     SampleList,
+    sample_name_format='LL',
 ):
     """
     Extract CARLIN information, like alleles, colonies, UMI count info
@@ -378,12 +379,13 @@ def extract_CARLIN_info(
         The list of desired samples to load
     """
 
+
     tmp_list = []
     for sample in SampleList:
         base_dir = os.path.join(data_path, sample)
         df_tmp = load_allele_info(base_dir)
-        df_tmp["sample"] = sample.split("_")[0]
-        df_tmp["mouse"] = sample.split("-")[0]
+        df_tmp["sample"] = rename_lib(sample,sample_name_format=sample_name_format) 
+        df_tmp["mouse"] = rename_lib(sample,sample_name_format=sample_name_format) 
 
         df_allele = pd.read_csv(
             data_path + f"/{sample}/AlleleAnnotations.txt",
@@ -533,11 +535,11 @@ def merge_three_locus(
     return df_all, df_sample_association
 
 
-def extract_lineage(x, scenario="LL"):
+def extract_lineage(x, sample_name_format="LL"):
     """
     We expect the structure like 'LL731-LF-B'
     """
-    if scenario == "LL":
+    if sample_name_format == "LL":
         x = "-".join(x.split("-")[:3])  # keep at most 3 entries
         if ("MPP3" in x) and ("MPP3-4" not in x):
             return "MPP3-4".join(x.split("MPP3"))
@@ -547,8 +549,8 @@ def extract_lineage(x, scenario="LL"):
         return x
 
 
-def rename_lib(x, scenario="LL"):
-    if scenario == "LL":
+def rename_lib(x, sample_name_format="LL"):
+    if sample_name_format == "LL":
         # this is for CARLIN data
         if "_S" in x:
             x = "_".join(x.split("_")[:-1])  # remve _SX at the end of the lib name
@@ -577,24 +579,33 @@ def rename_lib(x, scenario="LL"):
         return x
 
 
-def extract_plate_ID(x):
+def extract_plate_ID(x, sample_name_format="LL"):
     # this is for single-cell Limecat protocl
-    return x[:-3]
+    if sample_name_format == "LL":
+        return x[:-3]
+    else:
+        return x
 
 
-def add_metadata(df_sc_data, plate_map=None):
+def add_metadata(df_sc_data, plate_map=None, sample_name_format="LL"):
     """
     Annotate single-cell CARLIN data
     """
 
+    def custom_rename_lib(x):
+        return rename_lib(x, sample_name_format=sample_name_format)
+
+    def custom_extract_plate_ID(x):
+        return extract_plate_ID(x, sample_name_format=sample_name_format)
+
     if "library" in df_sc_data.columns:
         # CARLIN like data, based on library
-        df_sc_data["library"] = df_sc_data["library"].apply(rename_lib)
+        df_sc_data["library"] = df_sc_data["library"].apply(custom_rename_lib)
         df_sc_data["sample"] = df_sc_data["library"]
         df_sc_data["plate_ID"] = df_sc_data["sample"]
     elif "sample" in df_sc_data.columns:
         # plate-based single-cell data
-        df_sc_data["plate_ID"] = df_sc_data["sample"].apply(extract_plate_ID)
+        df_sc_data["plate_ID"] = df_sc_data["sample"].apply(custom_extract_plate_ID)
     else:
         raise ValueError("library or sample not found")
 
@@ -609,7 +620,7 @@ def add_metadata(df_sc_data, plate_map=None):
     return df_sc_data
 
 
-def generate_sc_CARLIN_from_CARLIN_output(df_all):
+def generate_sc_CARLIN_from_CARLIN_output(df_all, sample_name_format="LL"):
     if "locus" not in df_all.columns:
         df_all["locus"] = "locus"
 
@@ -627,7 +638,10 @@ def generate_sc_CARLIN_from_CARLIN_output(df_all):
     )
     df_sc_CARLIN = add_metadata(df_merge)
 
-    df_sc_CARLIN["lineage"] = df_merge["library"].apply(extract_lineage)
+    def custom_extract_lineage(x):
+        return extract_lineage(x, sample_name_format=sample_name_format)
+
+    df_sc_CARLIN["lineage"] = df_merge["library"].apply(custom_extract_lineage)
 
     return df_sc_CARLIN
 

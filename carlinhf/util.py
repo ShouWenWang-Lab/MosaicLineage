@@ -24,16 +24,23 @@ def map_dictionary(X1, X2):
     return dict_tmp
 
 
-def extract_first_sample_from_a_nesting_list(SampleList):
+def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"):
     """
     For a nesting list like ['a',['b','c'],['d','e','f']],
     it will return the first in each element, i.e, ['a','b','d']
     """
+
+    def custom_rename_lib(x):
+        return car.extract_lineage(
+            car.rename_lib(x, sample_name_format=sample_name_format),
+            sample_name_format=sample_name_format,
+        )
+
     selected_fates = []
     for x in SampleList:
         if type(x) is list:
             x = x[0]
-        selected_fates.append(car.extract_lineage(car.rename_lib(x)))
+        selected_fates.append(custom_rename_lib(x))
     return selected_fates
 
 
@@ -86,7 +93,7 @@ def onehot(input_dict):
 
 def reverse_compliment(seq):
     reverse = np.array(list(seq))[::-1]
-    map_seq = {"A": "T", "C": "G", "T": "A", "G": "C","N":"N"}
+    map_seq = {"A": "T", "C": "G", "T": "A", "G": "C", "N": "N"}
     complement = "".join([map_seq[x] for x in reverse])
     return complement
 

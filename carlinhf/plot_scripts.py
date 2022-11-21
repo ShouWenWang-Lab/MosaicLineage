@@ -1627,6 +1627,7 @@ def analyze_cell_coupling(
     min_clone_size=2,
     print_matrix=False,
     clone_id_key="clone_id",
+    sample_name_format="LL",
 ):
     """
     Analyze CARLIN clonal data, show the fate coupling etc.
@@ -1659,19 +1660,25 @@ def analyze_cell_coupling(
         {'only','until'}. until: include all previous fates up to...
     """
 
+    def custom_rename_lib(x):
+        return car.extract_lineage(
+            car.rename_lib(x, sample_name_format=sample_name_format),
+            sample_name_format=sample_name_format,
+        )
+
     print(f"Apply minimum clone size {min_clone_size}")
     selected_fates = []
     short_names_mock = []
     Flat_SampleList = []
     for x in SampleList:
         if type(x) is list:
-            sub_list = [car.extract_lineage(car.rename_lib(y)) for y in x]  #
+            sub_list = [custom_rename_lib(y) for y in x]  #
             selected_fates.append(sub_list)
             short_names_mock.append("_".join(sub_list))
             Flat_SampleList += x
         else:
-            selected_fates.append(car.extract_lineage(car.rename_lib(x)))
-            short_names_mock.append(car.extract_lineage(car.rename_lib(x)))
+            selected_fates.append(custom_rename_lib(x))
+            short_names_mock.append(custom_rename_lib(x))
             Flat_SampleList.append(x)
 
     if short_names is None:
@@ -1680,7 +1687,9 @@ def analyze_cell_coupling(
     if source is not None:
         Flat_SampleList = [x + f".{source}" for x in Flat_SampleList]
 
-    df_all = car.extract_CARLIN_info(data_path, Flat_SampleList)
+    df_all = car.extract_CARLIN_info(
+        data_path, Flat_SampleList, sample_name_format=sample_name_format
+    )
     df_all = df_all.merge(df_ref, on="allele", how="left")
 
     ignore = True
@@ -1716,7 +1725,9 @@ def analyze_cell_coupling(
     print("Clone number (after correction): {}".format(len(set(df_HQ["allele"]))))
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
-    df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(df_HQ)
+    df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(
+        df_HQ, sample_name_format=sample_name_format
+    )
     print(df_sc_CARLIN.shape)
     adata_orig = lineage.generate_adata_cell_by_allele(
         df_sc_CARLIN, min_clone_size=0, clone_id_key=clone_id_key
@@ -1931,6 +1942,7 @@ def visualize_sc_CARLIN_data(
     split_locus_read_CARLIN=False,
     data_des="",
     figure_dir="figure",
+    sample_name_format="LL",
 ):
     """
     For CARLIN pipeline output, run the following to get appropriate input
@@ -1962,7 +1974,10 @@ def visualize_sc_CARLIN_data(
         .reset_index()
     )
 
-    df_plot["library"] = df_plot["library"].apply(car.rename_lib)
+    def custom_rename_lib(x):
+        return car.rename_lib(x, sample_name_format=sample_name_format)
+
+    df_plot["library"] = df_plot["library"].apply(custom_rename_lib)
 
     fig, ax = plt.subplots()
     sns.scatterplot(
