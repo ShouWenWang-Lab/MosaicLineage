@@ -1188,8 +1188,8 @@ def insertion_del_freq_histogram(
     )
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only")
-    plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="ins")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only", color="#d7301f")
+    plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="ins", color="#225ea8")
     plt.loglog(x_var_indel[:-1], y_var_indel, "-o", label="indel")
     plt.legend()
     plt.xlabel(x_label)
@@ -1198,8 +1198,14 @@ def insertion_del_freq_histogram(
     plt.savefig(f"{figure_dir}/{sample_key}/in_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only")
-    plt.loglog(x_var_ins[:-1], y_var_ins + y_var_indel, "-o", label="ins+indel")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only", color="#d7301f")
+    plt.loglog(
+        x_var_ins[:-1],
+        y_var_ins + y_var_indel,
+        "-o",
+        label="with ins.",
+        color="#225ea8",
+    )
     plt.legend()
     plt.xlabel(x_label)
     plt.ylabel("Histogram")
@@ -1211,7 +1217,7 @@ def insertion_del_freq_histogram(
     ax = sns.lineplot(
         x=x_var_del[:-1],
         y=y_var_ins + y_var_indel,
-        label="ins+indel",
+        label="with ins.",
         ax=ax,
         marker="o",
     )
