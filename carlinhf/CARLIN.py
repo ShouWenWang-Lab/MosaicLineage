@@ -4,14 +4,10 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
-import seaborn as sns
 import yaml
 from Bio import SeqIO
-from Bio.Seq import Seq
-from matplotlib import pyplot as plt
 from scipy.io import loadmat
 
-import carlinhf.analysis_script as analysis
 import carlinhf.util as util
 
 #########################################
@@ -368,7 +364,7 @@ def load_allele_frequency_statistics(data_path: str, SampleList: list):
 def extract_CARLIN_info(
     data_path,
     SampleList,
-    sample_name_format='LL',
+    sample_name_format="LL",
 ):
     """
     Extract CARLIN information, like alleles, colonies, UMI count info
@@ -379,13 +375,12 @@ def extract_CARLIN_info(
         The list of desired samples to load
     """
 
-
     tmp_list = []
     for sample in SampleList:
         base_dir = os.path.join(data_path, sample)
         df_tmp = load_allele_info(base_dir)
-        df_tmp["sample"] = rename_lib(sample,sample_name_format=sample_name_format) 
-        df_tmp["mouse"] = rename_lib(sample,sample_name_format=sample_name_format) 
+        df_tmp["sample"] = rename_lib(sample, sample_name_format=sample_name_format)
+        df_tmp["mouse"] = rename_lib(sample, sample_name_format=sample_name_format)
 
         df_allele = pd.read_csv(
             data_path + f"/{sample}/AlleleAnnotations.txt",
@@ -636,7 +631,7 @@ def generate_sc_CARLIN_from_CARLIN_output(df_all, sample_name_format="LL"):
         .reset_index(drop=True)
         .rename(columns={"CB": "cell_bc", "CARLIN": "clone_id"})
     )
-    df_sc_CARLIN = add_metadata(df_merge,sample_name_format=sample_name_format)
+    df_sc_CARLIN = add_metadata(df_merge, sample_name_format=sample_name_format)
 
     def custom_extract_lineage(x):
         return extract_lineage(x, sample_name_format=sample_name_format)
@@ -1007,6 +1002,35 @@ def assign_clone_id_by_integrating_locus_v1(
             df_tmp = pd.DataFrame(df_allele[f"{locus}_BC"].dropna())
             df_tmp["prob"] = df_tmp[f"{locus}_BC"].map(allele_to_norm_count)
             column_key = f"{locus}_BC"
+
+        """
+        matrix_X: cell by allele matrix, n_cell * unique n_allele, a matrix of 1 and -1. 
+                1 means that the corresponding allele are detected in this cell, -1: not detected
+        mutation_value_matrix: n_allele * n_allele, the weight score for each unique allele. 
+                It is a diagonal matrix
+        allele_similarity_matrix: np.dot(matrix_X,mutation_value_matrix).dot(matrix_X.T),
+                A n_cell by n_cell matrix. This formula gives only the match score + un-detected score - mismatch score 
+                What we want is the the match score - mismatch score for each pair of cells. This is taken care of later. 
+                
+        A useful code to understand this process
+        ```python
+        matrix_X=np.array([[-1,-1,-1,1],[-1,-1,-1,1],[1,-1,-1,-1],[1,-1,-1,1]])
+        mutation_value_matrix=np.diag([1,10,100,1000])
+
+        similarity_matrix_tmp=np.dot(matrix_X,mutation_value_matrix).dot(matrix_X.T)
+        print('match score + un-detected score - mismatch score ')
+        print(similarity_matrix_tmp)
+
+        matrix_X_inverse=(matrix_X<0).astype(int) # inverse the matrix, the detected alele is 0 and undetected is 1
+        similarity_matrix_undetect=np.dot(matrix_X_inverse,mutation_value_matrix).dot(matrix_X_inverse.T)
+        print('un-detected score')
+        print(similarity_matrix_undetect)
+
+        print('Final connectivity')
+        Final_connectivity=similarity_matrix_tmp-similarity_matrix_undetect
+        print(Final_connectivity)
+        ```
+        """
 
         kernel = lambda x: np.exp(-((x / 0.1) ** 2))
         # kernel=lambda x: abs(np.log(x+10**(-4)))

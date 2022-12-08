@@ -1,5 +1,4 @@
 import os
-from cProfile import label
 
 import cospar as cs
 import numpy as np
@@ -8,13 +7,10 @@ import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
-from scipy.spatial import distance
 
-import carlinhf.analysis_script as analysis
 import carlinhf.CARLIN as car
 import carlinhf.lineage as lineage
 import carlinhf.plotting as plotting
-import carlinhf.util as util
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5

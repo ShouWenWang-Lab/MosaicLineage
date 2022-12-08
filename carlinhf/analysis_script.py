@@ -3,7 +3,6 @@ import os
 import cospar as cs
 import numpy as np
 import pandas as pd
-import scipy.sparse as ssp
 import seaborn as sns
 import yaml
 from matplotlib import pyplot as plt
