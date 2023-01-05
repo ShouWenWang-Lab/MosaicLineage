@@ -272,10 +272,11 @@ def subsample_allele_freq_histogram(
     df should be the allele dataframe with corresponding UMI_count information
     """
 
-    df["allele_frequency"] = df["UMI_count"] / df["UMI_count"].sum()
+    tot_UMI = df["UMI_count"].sum()
+    df["allele_frequency"] = df["UMI_count"] / tot_UMI
     sel_idx = np.random.choice(
         np.arange(len(df)),
-        size=int(sample_fraction * len(df)),
+        size=int(sample_fraction * tot_UMI),
         p=df["allele_frequency"].to_numpy(),
         replace=True,
     )
@@ -292,8 +293,8 @@ def subsample_allele_freq_histogram(
 
         x_var, y_var = plotting.plot_loghist(list(df_new["UMI_count"]), cutoff_y=3)
         plt.tight_layout()
-        plt.xlabel("Occurence # per allele (UMI count)")
-        plt.ylabel("Histogram")
+        plt.xlabel("Allele UMI count")
+        plt.ylabel("Frequency")
         plt.title(f"Singleton ratio: {singleton_ratio:.2f}")
         plt.savefig(f"figure/{sample_key}/subsampled_allele_frequency_distribution.pdf")
 

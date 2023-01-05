@@ -47,11 +47,11 @@ def mutation_statistics_box_plot(
     y_labels=[
         "Average deletion length",
         "Average insertion length",
-        "(Insertion #)/(deletion #)",  #: per UMI
+        "(Ins. events)/(del. events)",  #: per UMI
     ],
     figure_dir="figure",
     figsize=(3, 4),
-    rotation=90,
+    rotation=45,
 ):
     """
     df_noMerge: a
@@ -81,6 +81,8 @@ def mutation_statistics_box_plot(
         ax.set_xlabel("")
         plt.xticks(rotation=rotation)
         plt.tight_layout()
+        if j == 2:
+            ax.plot([-0.5, 1.3], [1, 1], "--", color="grey")
         fig.savefig(f"{figure_dir}/{sample_key}/{key}_202105.pdf")
 
 
@@ -124,7 +126,7 @@ def mutation_statistics_distribution_per_allele(
 
     ax.set_xlim([-0.1, 10])
     ax.set_xlabel("Mutation event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
@@ -150,8 +152,8 @@ def mutation_statistics_distribution_per_allele(
     )
 
     ax.set_xlim([-0.1, 10])
-    ax.set_xlabel("Insertion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Insertion events per allele")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
@@ -174,8 +176,8 @@ def mutation_statistics_distribution_per_allele(
     )
 
     ax.set_xlim([-0.1, 10])
-    ax.set_xlabel("Deletion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Deletion events per allele")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
@@ -211,8 +213,8 @@ def mutation_statistics_distribution_per_allele(
     )  # ,ax=ax,marker='o')
 
     ax.set_xlim([-0.1, 30])
-    ax.set_xlabel("Total insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total ins. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
@@ -246,7 +248,7 @@ def mutation_statistics_distribution_per_allele(
 
     ax.set_xlim([-0.1, 30])
     ax.set_xlabel("Single insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
@@ -280,7 +282,7 @@ def mutation_statistics_distribution_per_allele(
 
     # ax.set_xlim([-0.1,30])
     ax.set_xlabel("Total deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
@@ -314,7 +316,7 @@ def mutation_statistics_distribution_per_allele(
 
     # ax.set_xlim([-0.1,30])
     ax.set_xlabel("Single deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plotting.add_shade(ax)
     plt.tight_layout()
@@ -365,7 +367,7 @@ def mutation_statistics_distribution_per_allele_single_input(
 
     ax.set_xlim([-0.1, 10])
     ax.set_xlabel("Mutation event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade_1(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
@@ -380,7 +382,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     ax = sns.lineplot(x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label, marker="o")
     ax.set_xlim([-0.1, 10])
     ax.set_xlabel("Insertion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade_1(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
@@ -392,8 +394,8 @@ def mutation_statistics_distribution_per_allele_single_input(
     fig, ax = plt.subplots()
     ax = sns.lineplot(x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label, marker="o")
     ax.set_xlim([-0.1, 10])
-    ax.set_xlabel("Deletion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Deletion events per allele")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade_1(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
@@ -414,8 +416,8 @@ def mutation_statistics_distribution_per_allele_single_input(
         color="#d7301f",
     )
     ax.set_xlim([-0.1, 10])
-    ax.set_xlabel("Event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Events per allele")
+    ax.set_ylabel("Normalized frequency")
     plt.tight_layout()
     plotting.add_shade(ax, color=["#225ea8", "#d7301f"])
     plt.savefig(f"{figure_dir}/{sample_key}/ins_deletion_per_allele.pdf")
@@ -432,8 +434,8 @@ def mutation_statistics_distribution_per_allele_single_input(
         x=ins_SB_hist_x[:-1], y=ins_SB_hist_y, label=label
     )  # ,marker='o')
     ax.set_xlim([-0.1, 30])
-    ax.set_xlabel("Total insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total ins. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade_1(ax)
@@ -455,8 +457,8 @@ def mutation_statistics_distribution_per_allele_single_input(
     )  # ,marker='o')
 
     ax.set_xlim([-0.1, 30])
-    ax.set_xlabel("Single insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Single ins. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade_1(ax)
@@ -477,8 +479,8 @@ def mutation_statistics_distribution_per_allele_single_input(
 
     # ax.set_xlim([-0.1,30])
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
-    ax.set_xlabel("Total deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total del. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     plt.xlim([0, 300])
     # plt.xscale('log')
     plt.tight_layout()
@@ -505,8 +507,8 @@ def mutation_statistics_distribution_per_allele_single_input(
         label="Deletion",
         color="#d7301f",
     )  # ,marker='o')
-    ax.set_xlabel("Total mutation length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total mutation length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     # ax2.set_ylabel("")
     ax.figure.legend(loc="upper center")
     # plt.xscale('log')
@@ -531,8 +533,8 @@ def mutation_statistics_distribution_per_allele_single_input(
     )  # ,marker='o')
 
     # ax.set_xlim([-0.1,30])
-    ax.set_xlabel("Single deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Single del. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plotting.add_shade_1(ax)
     plt.tight_layout()
@@ -544,7 +546,7 @@ def mutation_statistics_distribution_per_allele_single_input(
     y_SB = np.cumsum(del_SB_hist_y)
     fig, ax = plt.subplots()
     sns.lineplot(x=[0] + list(del_SB_hist_x[:-1]), y=[0] + list(y_SB), label=label)
-    ax.set_xlabel("Single deletion length")
+    ax.set_xlabel("Single deletion length (bp)")
     ax.set_ylabel("Cumulative deletion frequency")
     plt.tight_layout()
     plt.savefig(
@@ -665,7 +667,7 @@ def plot_mutation_statistics_distribution_per_allele(
     )
     ax.set_xlim([-0.1, 10])
     ax.set_xlabel("Mutation event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/mutation_per_allele_compare_cas9_Dntt.pdf")
 
@@ -692,8 +694,8 @@ def plot_mutation_statistics_distribution_per_allele(
         legend=legend,
     )
     ax.set_xlim([-0.1, 10])
-    ax.set_xlabel("Insertion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Insertion events per allele")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/insertion_per_allele_compare_cas9_Dntt.pdf")
 
@@ -719,8 +721,8 @@ def plot_mutation_statistics_distribution_per_allele(
         palette=palette,
         legend=legend,
     )
-    ax.set_xlabel("Deletion event # per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Deletion events per allele")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
@@ -746,8 +748,8 @@ def plot_mutation_statistics_distribution_per_allele(
         legend=legend,
     )
     ax.set_xlim([-0.1, 30])
-    ax.set_xlabel("Total insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total ins. length per allele (bp)")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(
         f"{figure_dir}/{sample_key}/tot_ins_length_per_allele_compare_cas9_Dntt.pdf"
@@ -776,7 +778,7 @@ def plot_mutation_statistics_distribution_per_allele(
     )
     ax.set_xlim([-0.1, 30])
     ax.set_xlabel("Single insertion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(
         f"{figure_dir}/{sample_key}/single_ins_length_per_allele_compare_cas9_Dntt.pdf"
@@ -804,7 +806,7 @@ def plot_mutation_statistics_distribution_per_allele(
         legend=legend,
     )
     ax.set_xlabel("Total deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(
         f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
@@ -832,7 +834,7 @@ def plot_mutation_statistics_distribution_per_allele(
         legend=legend,
     )
     ax.set_xlabel("Single deletion length per allele")
-    ax.set_ylabel("Distribution")
+    ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(
         f"{figure_dir}/{sample_key}/single_del_length_per_allele_compare_cas9_Dntt.pdf"
@@ -924,8 +926,8 @@ def mutation_statistics_distribution_UMI(
     )
     # plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     ax.set_xlim([-0.1, 10.2])
-    ax.set_xlabel("Total insertion length per UMI")
-    ax.set_ylabel("Distribution")
+    ax.set_xlabel("Total ins. length per UMI (bp)")
+    ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
@@ -945,8 +947,8 @@ def allele_statistics_at_given_sampling_depth(
 ):
 
     # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
-    x_label_1 = "Observed cell #"
-    x_label_2 = "Edited cell #"
+    x_label_1 = "Observed cells"
+    x_label_2 = "Edited cells"
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     ## Singleton fraction
@@ -970,8 +972,8 @@ def allele_statistics_at_given_sampling_depth(
         legend=legend,
     )
     # g.ax.legend(loc="best", title=None)
-    g.ax.set_xlabel("Total observed alleles")
-    g.ax.set_ylabel("Singleton fraction")
+    g.ax.set_xlabel("Observed alleles")
+    g.ax.set_ylabel("Singleton allele fraction")
     g.ax.set_ylim([0, 1])
     if df_Merge_1["total_alleles"].max() > 5:
         g.ax.set_xlim([2, 6])
@@ -1007,7 +1009,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
-    g.ax.set_ylabel("Observed allele number")
+    g.ax.set_ylabel("Observed alleles")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/total_allele_vs_eventful.pdf")
 
@@ -1027,7 +1029,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
-    g.ax.set_ylabel("Observed allele number")
+    g.ax.set_ylabel("Observed alleles")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/total_allele_vs_called.pdf")
 
@@ -1048,7 +1050,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
-    g.ax.set_ylabel("# of alleles observed only once")
+    g.ax.set_ylabel("Singleton alleles")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/singleton_vs_eventful.pdf")
 
@@ -1068,7 +1070,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
-    g.ax.set_ylabel("# of alleles observed only once")
+    g.ax.set_ylabel("Singleton alleles")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/singleton_vs_called.pdf")
 
@@ -1091,7 +1093,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_2)
-    g.ax.set_ylabel("Effective allele number")
+    g.ax.set_ylabel("Shannon allele diversity")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/effective_allele_vs_eventful.pdf")
 
@@ -1114,7 +1116,7 @@ def allele_statistics_at_given_sampling_depth(
     plt.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
     g.ax.set_xlabel(x_label_1)
-    g.ax.set_ylabel("Effective allele number")
+    g.ax.set_ylabel("Shannon allele diversity")
     # plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/effective_allele_vs_called.pdf")
 
@@ -1160,7 +1162,7 @@ def insertion_del_freq_histogram(
     x_var, y_var = plotting.plot_loghist(
         list(df_mutation["UMI_count"]), cutoff_y=1, bins=20
     )
-    x_label = "Occurence # per allele (UMI count)"
+    x_label = "Allele UMI count"
 
     # x_var=[0,5,10,100,500,1000,10000,1000000]
     df_mutation_1 = df_mutation.reset_index()
@@ -1184,43 +1186,43 @@ def insertion_del_freq_histogram(
     )
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only", color="#d7301f")
-    plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="ins", color="#225ea8")
-    plt.loglog(x_var_indel[:-1], y_var_indel, "-o", label="indel")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="Del. only", color="#d7301f")
+    plt.loglog(x_var_ins[:-1], y_var_ins, "-o", label="Ins.", color="#225ea8")
+    plt.loglog(x_var_indel[:-1], y_var_indel, "-o", label="Indel")
     plt.legend()
     plt.xlabel(x_label)
-    plt.ylabel("Histogram")
+    plt.ylabel("Frequency")
     plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/in_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
-    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="del. only", color="#d7301f")
+    plt.loglog(x_var_del[:-1], y_var_del, "-o", label="Del. only", color="#d7301f")
     plt.loglog(
         x_var_ins[:-1],
         y_var_ins + y_var_indel,
         "-o",
-        label="with ins.",
+        label="With ins.",
         color="#225ea8",
     )
     plt.legend()
     plt.xlabel(x_label)
-    plt.ylabel("Histogram")
+    plt.ylabel("Frequency")
     plt.tight_layout()
     plt.savefig(f"{figure_dir}/{sample_key}/indel_del_freq_histogram_log.pdf")
 
     fig, ax = plt.subplots()
-    ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="del. only", marker="o")
+    ax = sns.lineplot(x=x_var_del[:-1], y=y_var_del, label="Del. only", marker="o")
     ax = sns.lineplot(
         x=x_var_del[:-1],
         y=y_var_ins + y_var_indel,
-        label="with ins.",
+        label="With ins.",
         ax=ax,
         marker="o",
     )
     # plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
     ax.set_xlim([0, 50])
     plt.xlabel(x_label)
-    ax.set_ylabel("Histogram")
+    ax.set_ylabel("Frequency")
     # plt.xscale('log')
     plt.tight_layout()
     plotting.add_shade(ax)
@@ -1327,10 +1329,10 @@ def three_locus_comparison_plots(
         "Allele output per reads (normalized)",
     ]
     performance_x_label = [
-        f"Edited cell fraction",
+        f"Editing efficiency (%)",
         "Total allele number",
         "Singleton number",
-        "Singleton fraction",
+        "Singleton allele frac.",
         "CARLIN potential (allel)",
         "Percent of alleles within a locus",
         "Percent of singleton within a locus",
@@ -1350,6 +1352,7 @@ def three_locus_comparison_plots(
     df_all["Allele output per reads (normalized)"] = temp
 
     df_all[f"{tag_name}_per_clone"] = df_all[f"called"] / df_all["total_alleles"]
+    df_all["Allele loci"] = df_all["Type"]
 
     for j, qc in enumerate(QC_metric):
         if qc in df_all.columns:
@@ -1357,7 +1360,7 @@ def three_locus_comparison_plots(
                 data=df_all,
                 x="sample_id",
                 y=qc,
-                hue="Type",
+                hue="Allele loci",
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
@@ -1366,7 +1369,7 @@ def three_locus_comparison_plots(
             g.ax.set_ylabel(QC_x_label[j])
             g.ax.set_xlabel("")
             # g.ax.set_title("QC")
-            plt.xticks(rotation=90)
+            plt.xticks(rotation=45)
             # plt.xticks(rotation='vertical');
             plt.savefig(f"{figure_dir}/{sample_key}/{qc}.pdf")
         else:
@@ -1378,7 +1381,7 @@ def three_locus_comparison_plots(
                 data=df_all,
                 x="sample_id",
                 y=y,
-                hue="Type",
+                hue="Allele loci",
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
@@ -1387,7 +1390,7 @@ def three_locus_comparison_plots(
             g.ax.set_ylabel(performance_x_label[j])
             g.ax.set_xlabel("")
             # g.ax.set_title("Performance")
-            plt.xticks(rotation=90)
+            plt.xticks(rotation=45)
             # plt.xticks(rotation='vertical');
             plt.savefig(f"{figure_dir}/{sample_key}/{y}_bar.pdf")
         else:
@@ -1438,7 +1441,7 @@ def analyze_cell_coupling_core(
         plt.hist(sample_num_per_clone)
         # plt.yscale('log')
         plt.xlabel("Number of samples per clone")
-        plt.ylabel("Histogram")
+        plt.ylabel("Frequency")
         plt.tight_layout()
         plt.savefig(f"{figure_path}/sample_number_{data_des}.pdf")
 
@@ -1668,7 +1671,7 @@ def analyze_cell_coupling(
             car.rename_lib(x, sample_name_format=sample_name_format),
             sample_name_format=sample_name_format,
         )
-    
+
     print(f"Apply minimum clone size {min_clone_size}")
     selected_fates = []
     short_names_mock = []
@@ -1685,7 +1688,7 @@ def analyze_cell_coupling(
             Flat_SampleList.append(x)
 
     if verbose:
-        print('selected fates',selected_fates)
+        print("selected fates", selected_fates)
     if short_names is None:
         short_names = short_names_mock
 
@@ -1731,24 +1734,24 @@ def analyze_cell_coupling(
     print("Cell number (after correction): {}".format(len(df_HQ["allele"])))
 
     if verbose:
-        print('------df_HQ-------')
+        print("------df_HQ-------")
         display(df_HQ)
-        
+
     df_sc_CARLIN = car.generate_sc_CARLIN_from_CARLIN_output(
         df_HQ, sample_name_format=sample_name_format
     )
     if verbose:
         print(df_sc_CARLIN.shape)
-        print('------df_sc_CARLIN-------')
+        print("------df_sc_CARLIN-------")
         display(df_sc_CARLIN)
-        
+
     adata_orig = lineage.generate_adata_cell_by_allele(
         df_sc_CARLIN, min_clone_size=0, clone_id_key=clone_id_key
     )
-    
+
     if verbose:
         print(adata_orig.shape)
-        print('adata_orig state info',adata_orig.obs['state_info'])
+        print("adata_orig state info", adata_orig.obs["state_info"])
 
     # ordered_selected_fates = util.order_sample_by_fates(
     #     list(adata_orig.obs["state_info"].unique())
@@ -2018,7 +2021,7 @@ def visualize_sc_CARLIN_data(
         hue_order=["CC", "TC", "RC"],
     )
     plt.legend(loc=[1.01, 0.3])
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
     plt.ylabel("Clone number")
     plt.xlabel("")
     plt.tight_layout()
