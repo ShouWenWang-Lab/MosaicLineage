@@ -281,7 +281,7 @@ def mutation_statistics_distribution_per_allele(
     )  # ,ax=ax,marker='o')
 
     # ax.set_xlim([-0.1,30])
-    ax.set_xlabel("Total deletion length per allele")
+    ax.set_xlabel("Total del. length per allele (bp)")
     ax.set_ylabel("Normalized frequency")
     # plt.xscale('log')
     plt.tight_layout()
@@ -805,7 +805,7 @@ def plot_mutation_statistics_distribution_per_allele(
         palette=palette,
         legend=legend,
     )
-    ax.set_xlabel("Total deletion length per allele")
+    ax.set_xlabel("Total del. length per allele (bp)")
     ax.set_ylabel("Normalized frequency")
     more_features(ax)
     plt.savefig(
