@@ -1546,7 +1546,7 @@ def analyze_cell_coupling_core(
             vmax=vmax,
             order_map_x=order_map,
             order_map_y=order_map,
-            color_bar_label="Clonal coupling",
+            color_bar_label="Clonal coupling score",
             title="",
         )
         clone_N = adata.obsm["X_clone"].shape[1]
