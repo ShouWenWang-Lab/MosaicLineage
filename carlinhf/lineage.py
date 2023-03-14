@@ -64,6 +64,8 @@ def mutations_length_per_allele_ins_del(df_input):
     Count the insertion and deletion length. Note that
     some mutations have both insertion and deletion, and we are
     double counting here.
+
+    Note that it does not account for the UMI_count
     """
 
     ins_per_allele = []

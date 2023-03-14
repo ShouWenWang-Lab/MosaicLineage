@@ -400,6 +400,9 @@ def mutation_statistics_distribution_per_allele_single_input(
     plotting.add_shade_1(ax)
     plt.savefig(f"{figure_dir}/{sample_key}/deletion_per_allele_compare_cas9_Dntt.pdf")
 
+    print(f"Mean single deletion length for Cas9: {np.mean(del_per_allele_SB)}")
+    print(f"Median single deletion length for Cas9: {np.median(del_per_allele_SB)}")
+
     fig, ax = plt.subplots()
     ax = sns.lineplot(
         x=ins_SB_hist_x[:-1],
@@ -488,6 +491,8 @@ def mutation_statistics_distribution_per_allele_single_input(
     plt.savefig(
         f"{figure_dir}/{sample_key}/tot_del_length_per_allele_compare_cas9_Dntt.pdf"
     )
+    print(f"Mean total deletion length for Cas9: {np.mean(del_length_SB)}")
+    print(f"Median total deletion length for Cas9: {np.median(del_length_SB)}")
 
     ins_length_SB = [np.sum(x) for x in ins_per_allele_SB]
     ins_SB_hist_y, ins_SB_hist_x = np.histogram(ins_length_SB, bins=np.arange(100))
@@ -947,8 +952,8 @@ def allele_statistics_at_given_sampling_depth(
 ):
 
     # df_noMerge=df_Merge[df_Merge['sample']!='merge_all']
-    x_label_1 = "Observed cells"
-    x_label_2 = "Edited cells"
+    x_label_1 = "Observed UMIs"
+    x_label_2 = "Edited UMIs"
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
     ## Singleton fraction
