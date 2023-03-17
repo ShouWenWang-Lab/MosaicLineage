@@ -640,7 +640,7 @@ def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=2, log_scale=T
     unique_count = np.array(unique_count)
     for j, key in enumerate(target_keys):
         fig, ax = plt.subplots()
-        ax = sns.scatterplot(read_cutoff_list, unique_count[:, j])
+        ax = sns.scatterplot(x=read_cutoff_list, y=unique_count[:, j])
         ax.set_xlabel("Read cutoff")
         if log_scale:
             plt.xscale("log")
