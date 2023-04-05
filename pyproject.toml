@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "carlinhf"
-version = "0.1.0"
-description = "CARLIN help functions"
-authors = ["Shou-Wen Wang <wangsw09@gmail.com>"]
+name = "mosaiclineage"
+version = "0.2.0"
+description = "A collection of functions designed to analyze lineage tracing data from different systems"
+authors = ["Shou-Wen Wang <wangshouwen@westlake.edu.cn>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]

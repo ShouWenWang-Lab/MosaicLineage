@@ -843,6 +843,7 @@ def assign_clone_id_by_integrating_locus(
 
     df_sc_CARLIN = df_sc_CARLIN.set_index("RNA_id")
     df_sc_CARLIN["joint_clone_id"] = df_cells["joint_clone_id"]
+    df_sc_CARLIN["joint_clone_id_tmp"] = df_cells["joint_clone_id_tmp"]
     df_sc_CARLIN["joint_prob"] = df_cells["joint_prob"]
     df_sc_CARLIN["joint_allele_num"] = df_sc_CARLIN["joint_clone_id"].map(
         dict(
@@ -850,7 +851,11 @@ def assign_clone_id_by_integrating_locus(
         )
     )
     df_sc_CARLIN = df_sc_CARLIN.reset_index()
-    return df_assigned_clones, df_sc_CARLIN, df_allele.filter(locus_BC_names)
+    return (
+        df_assigned_clones,
+        df_sc_CARLIN,
+        df_allele.filter(locus_BC_names + ["joint_clone_id_tmp"]),
+    )
 
 
 def assign_clone_id_by_integrating_locus_v1(
