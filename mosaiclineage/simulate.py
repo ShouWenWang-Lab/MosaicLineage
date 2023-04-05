@@ -1,7 +1,6 @@
+import mosaiclineage.lineage as lineage
 import numpy as np
 import pandas as pd
-
-import carlinhf.lineage as lineage
 
 rng = np.random.default_rng()
 
@@ -10,6 +9,7 @@ rng = np.random.default_rng()
 # functions for simulation
 
 ##########################
+
 
 def power_law_from_double_exp(
     a=np.log(2), b=np.log(2), insertion_rate=0.5, generation=12, sp_ratio=1

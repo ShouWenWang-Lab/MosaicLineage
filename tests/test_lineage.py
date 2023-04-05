@@ -1,19 +1,19 @@
 import os
 import sys
 
-from carlinhf import lineage
+from mosaiclineage import lineage
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pathlib import Path
 
-import cospar as cs
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.io import loadmat
-
 from tests.context import hf
+
+import cospar as cs
 
 
 def config(shared_datadir):

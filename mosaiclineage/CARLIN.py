@@ -1,14 +1,13 @@
 import gzip
 import os
 
+import mosaiclineage.util as util
 import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import yaml
 from Bio import SeqIO
 from scipy.io import loadmat
-
-import carlinhf.util as util
 
 #########################################
 
@@ -684,8 +683,9 @@ def assign_clone_id_by_integrating_locus(
     ```
     """
 
-    import scanpy as sc
     from tqdm import tqdm
+
+    import scanpy as sc
 
     df_sc_CARLIN = df_sc_CARLIN_raw[
         (df_sc_CARLIN_raw["normalized_count"] < prob_cutoff)
@@ -906,8 +906,9 @@ def assign_clone_id_by_integrating_locus_v1(
     ```
     """
 
-    import scanpy as sc
     from tqdm import tqdm
+
+    import scanpy as sc
 
     df_sc_CARLIN = df_sc_CARLIN_raw[
         (df_sc_CARLIN_raw["normalized_count"] < prob_cutoff)

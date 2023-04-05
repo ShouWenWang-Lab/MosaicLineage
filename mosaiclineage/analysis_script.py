@@ -1,6 +1,7 @@
 import os
 
-import cospar as cs
+import mosaiclineage.CARLIN as car
+import mosaiclineage.lineage as lineage
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -8,8 +9,7 @@ import yaml
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
-import carlinhf.CARLIN as car
-import carlinhf.lineage as lineage
+import cospar as cs
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5
@@ -721,7 +721,14 @@ def extract_normalized_coarse_X_clone(
 
 
 def annotate_adata_with_lineage_info(
-    adata, scCARLIN_data_des, joint_clone_key="joint_clone_id", annotate_t1t2=True,BC_max_sample_count = 1,BC_max_freq = 0.02,read_cutoff = 5,min_fate_UMI_count = 3
+    adata,
+    scCARLIN_data_des,
+    joint_clone_key="joint_clone_id",
+    annotate_t1t2=True,
+    BC_max_sample_count=1,
+    BC_max_freq=0.02,
+    read_cutoff=5,
+    min_fate_UMI_count=3,
 ):
 
     cs.pp.initialize_adata_object(adata)
@@ -737,11 +744,6 @@ def annotate_adata_with_lineage_info(
         f"data/{scCARLIN_data_des}_df_sc_data_joint_with_fate.csv"
     )
     df_sc_data = pd.read_csv(f"data/{scCARLIN_data_des}_AGM_FL_BM_df_sc_data.csv")
-
-    
-    
-    
-    
 
     df_sc_data_HQ = df_sc_data.assign(
         HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)

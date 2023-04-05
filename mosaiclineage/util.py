@@ -1,7 +1,6 @@
+import mosaiclineage.CARLIN as car
 import numpy as np
 import pandas as pd
-
-import carlinhf.CARLIN as car
 
 rng = np.random.default_rng()
 

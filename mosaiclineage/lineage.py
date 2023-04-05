@@ -1,15 +1,15 @@
 import os
 
-import cospar as cs
+import mosaiclineage.plotting as plotting
 import numpy as np
 import pandas as pd
-import scanpy as sc
 import scipy.sparse as ssp
 import seaborn as sns
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-import carlinhf.plotting as plotting
+import cospar as cs
+import scanpy as sc
 
 rng = np.random.default_rng()
 
