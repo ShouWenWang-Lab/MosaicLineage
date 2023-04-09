@@ -55,7 +55,7 @@ def load_all_samples_to_adata(
 
 
 def merge_adata_across_times(
-    adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scLimeCat"
+    adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scCamellia"
 ):
     adata_t1_ = adata_t1.raw.to_adata()
     adata_t2_ = adata_t2.raw.to_adata()

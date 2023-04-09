@@ -96,16 +96,16 @@ def CARLIN_analysis(
     return df_final
 
 
-def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
+def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
     """
     Load raw fastq files. This function will depend on what protocol is used.
     """
-    # supported_protocol = ["scLimeCat", "sc10xV3"]
+    # supported_protocol = ["scCamellia", "sc10xV3"]
     # if not (protocol in supported_protocol):
     #     raise ValueError(f"Only support protocols: {supported_protocol}")
 
     if protocol.startswith("sc"):
-        if protocol == "scLimeCat":
+        if protocol == "scCamellia":
             bc_len = 8
             umi_len = 8
             tag_read = "R2"
@@ -116,7 +116,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scLimeCat"):
             tag_read = "R1"
             seq_read = "R2"
         else:
-            raise ValueError(f"{protocol} must be among scLimeCat, sc10xV3")
+            raise ValueError(f"{protocol} must be among scCamellia, sc10xV3")
 
         seq_list = []
         seq_quality = []
