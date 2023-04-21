@@ -722,9 +722,26 @@ def extract_normalized_coarse_X_clone(
 
 def annotate_adata_with_lineage_info(
     adata,
+    df_sc_data_HQ,
+    joint_clone_key="joint_clone_id",
+):
+    cs.pp.initialize_adata_object(adata)
+    cs.pp.get_X_clone(adata, df_sc_data_HQ["RNA_id"], df_sc_data_HQ[joint_clone_key])
+
+    adata.obs["joint_clone_id_tmp"] = df_sc_data_HQ.drop_duplicates(
+        subset="RNA_id"
+    ).set_index("RNA_id")["joint_clone_id_tmp"]
+    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(subset="RNA_id").set_index(
+        "RNA_id"
+    )["joint_clone_id"]
+    return adata
+
+## This function is outdated. Mindful of how HQ clones are selected here
+def annotate_adata_with_bulk_lineage_fate(
+    adata,
     scCARLIN_data_des,
     joint_clone_key="joint_clone_id",
-    annotate_t1t2=True,
+    annotate_t1t2=False,
     BC_max_sample_count=1,
     BC_max_freq=0.02,
     read_cutoff=5,
@@ -736,36 +753,36 @@ def annotate_adata_with_lineage_info(
     #     ["AGM", "FL", "BM"], ordered=True
     # )
     # adata.uns["tissue_colors"] = ["#66c2a5", "#8da0cb", "#e78ac3"]
-
-    df_fate_matrix_with_sc = pd.read_csv(
-        f"data/{scCARLIN_data_des}_df_fate_matrix_with_sc.csv"
-    )
-    df_sc_data_joint_with_fate = pd.read_csv(
-        f"data/{scCARLIN_data_des}_df_sc_data_joint_with_fate.csv"
-    )
     df_sc_data = pd.read_csv(f"data/{scCARLIN_data_des}_AGM_FL_BM_df_sc_data.csv")
-
     df_sc_data_HQ = df_sc_data.assign(
         HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
         & (x["normalized_count"] <= BC_max_freq)
         & (x["read"] >= read_cutoff)
     ).query("HQ==True")
 
-    df_sc_data_HQ_joint_with_fate = df_sc_data_joint_with_fate.assign(
-        HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-        & (x["normalized_count"] <= BC_max_freq)
-        & (x["read"] >= read_cutoff)
-        & (x["clone_size"] >= min_fate_UMI_count)
-    ).query("HQ==True")
+    if annotate_t1t2:
+        df_fate_matrix_with_sc = pd.read_csv(
+            f"data/{scCARLIN_data_des}_df_fate_matrix_with_sc.csv"
+        )
+        df_sc_data_joint_with_fate = pd.read_csv(
+            f"data/{scCARLIN_data_des}_df_sc_data_joint_with_fate.csv"
+        )
 
-    print("df_sc_data_HQ_joint_with_fate:", len(df_sc_data_HQ_joint_with_fate))
+        df_sc_data_HQ_joint_with_fate = df_sc_data_joint_with_fate.assign(
+            HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
+            & (x["normalized_count"] <= BC_max_freq)
+            & (x["read"] >= read_cutoff)
+            & (x["clone_size"] >= min_fate_UMI_count)
+        ).query("HQ==True")
+
+        print("df_sc_data_HQ_joint_with_fate:", len(df_sc_data_HQ_joint_with_fate))
 
     cs.pp.get_X_clone(adata, df_sc_data_HQ["RNA_id"], df_sc_data_HQ[joint_clone_key])
 
-    adata.obs["joint_clone_id_tmp"] = df_sc_data.drop_duplicates(
+    adata.obs["joint_clone_id_tmp"] = df_sc_data_HQ.drop_duplicates(
         subset="RNA_id"
     ).set_index("RNA_id")["joint_clone_id_tmp"]
-    adata.obs["joint_clone_id"] = df_sc_data.drop_duplicates(subset="RNA_id").set_index(
+    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(subset="RNA_id").set_index(
         "RNA_id"
     )["joint_clone_id"]
 
