@@ -168,6 +168,9 @@ def visualize_tree(
     dpi=300,
     data_des="tree",
     figure_path=".",
+    line_width=0,
+    marker_size_internal=5,
+    marker_size_leaf=5,
 ):
     """
     Visualize a tree structured in ete3 style.
@@ -208,28 +211,28 @@ def visualize_tree(
     from IPython.display import Image, display
 
     def layout(node):
-        if node.is_leaf():
+        if node.is_leaf(): # this is the part showing the leaf
             N = AttrFace("name", fsize=5)
             faces.add_face_to_node(N, node, 100, position="aligned")
             # pass
 
     if color_coding is not None:
         print("coding")
-        for n in input_tree.traverse():
-            nst1 = NodeStyle(size=1, fgcolor="#f0f0f0")
+        for n in input_tree.traverse(): # internal node
+            nst1 = NodeStyle(size=marker_size_internal, fgcolor="#f0f0f0",vt_line_width=line_width,hz_line_width=line_width)
             n.set_style(nst1)
 
         for n in input_tree:
             for key, value in color_coding.items():
-                if n.name.startswith(key):
-                    nst1 = NodeStyle(size=1)
+                if n.name==key:
+                    nst1 = NodeStyle(size=marker_size_leaf,hz_line_width=line_width, fgcolor="#000000")
                     nst1["bgcolor"] = value
                     n.set_style(nst1)
 
     ts = TreeStyle()
-    ts.layout_fn = layout
-    ts.show_leaf_name = False
+    #ts.layout_fn = layout # layout not used. It will add faces to each node, and each fates is the leaf name
     ts.mode = mode
+    ts.show_leaf_name = False
     # ts.extra_branch_line_color = "red"
     # ts.extra_branch_line_type = 0
     input_tree.render(
