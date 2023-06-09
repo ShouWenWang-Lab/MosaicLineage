@@ -1,4 +1,3 @@
-import mosaiclineage.CARLIN as car
 import numpy as np
 import pandas as pd
 
@@ -21,26 +20,6 @@ def map_dictionary(X1, X2):
             if x1 in x2:
                 dict_tmp[x1] = x2
     return dict_tmp
-
-
-def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"):
-    """
-    For a nesting list like ['a',['b','c'],['d','e','f']],
-    it will return the first in each element, i.e, ['a','b','d']
-    """
-
-    def custom_rename_lib(x):
-        return car.extract_lineage(
-            car.rename_lib(x, sample_name_format=sample_name_format),
-            sample_name_format=sample_name_format,
-        )
-
-    selected_fates = []
-    for x in SampleList:
-        if type(x) is list:
-            x = x[0]
-        selected_fates.append(custom_rename_lib(x))
-    return selected_fates
 
 
 def estimate_exponent(X, xmin=None):

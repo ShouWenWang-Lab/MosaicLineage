@@ -572,6 +572,25 @@ def rename_lib(x, sample_name_format="LL"):
     else:
         return x
 
+def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"):
+    """
+    For a nesting list like ['a',['b','c'],['d','e','f']],
+    it will return the first in each element, i.e, ['a','b','d']
+    """
+
+    def custom_rename_lib(x):
+        return extract_lineage(
+            rename_lib(x, sample_name_format=sample_name_format),
+            sample_name_format=sample_name_format,
+        )
+
+    selected_fates = []
+    for x in SampleList:
+        if type(x) is list:
+            x = x[0]
+        selected_fates.append(custom_rename_lib(x))
+    return selected_fates
+
 
 def extract_plate_ID(x, sample_name_format="LL"):
     # this is for single-cell Limecat protocl
