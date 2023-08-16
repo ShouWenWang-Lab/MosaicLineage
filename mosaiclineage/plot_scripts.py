@@ -280,8 +280,8 @@ def mutation_statistics_distribution_per_allele(
     ax = sns.lineplot(
         x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2,linewidth=1
     )  # ,ax=ax,marker='o')
-    ax1.plot([np.mean(del_length_SB),np.mean(del_length_SB)],[0,0.7*max_y],'--',color='#1f77b4',linewidth=1)
-    ax.plot([np.mean(del_length_LL),np.mean(del_length_LL)],[0,0.7*max_y],'--',color='#ff7f0e',linewidth=1)
+    ax1.plot([np.median(del_length_SB),np.median(del_length_SB)],[0,0.7*max_y],'--',color='#1f77b4',linewidth=1)
+    ax.plot([np.median(del_length_LL),np.median(del_length_LL)],[0,0.7*max_y],'--',color='#ff7f0e',linewidth=1)
 
     # ax.set_xlim([-0.1,30])
     ax.set_xlabel("Total del. length per allele (bp)")
