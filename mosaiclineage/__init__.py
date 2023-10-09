@@ -6,6 +6,7 @@ from . import (
     lineage,
     plot_scripts,
     plotting,
+    settings,
     simulate,
     util,
 )

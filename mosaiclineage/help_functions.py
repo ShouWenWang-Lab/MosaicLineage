@@ -4,5 +4,6 @@ from .larry import *
 from .lineage import *
 from .plot_scripts import *
 from .plotting import *
+from .settings import *
 from .simulate import *
 from .util import *
