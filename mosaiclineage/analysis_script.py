@@ -1,7 +1,6 @@
 import os
 
-import mosaiclineage.CARLIN as car
-import mosaiclineage.lineage as lineage
+import cospar as cs
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -9,7 +8,8 @@ import yaml
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
-import cospar as cs
+import mosaiclineage.DARLIN as car
+import mosaiclineage.lineage as lineage
 
 cs.settings.set_figure_params(format="pdf", figsize=[4, 3.5], dpi=150, fontsize=14)
 rcParams["legend.handlelength"] = 1.5

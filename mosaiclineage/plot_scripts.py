@@ -8,7 +8,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 
-import mosaiclineage.CARLIN as car
+import mosaiclineage.DARLIN as car
 import mosaiclineage.lineage as lineage
 import mosaiclineage.plotting as plotting
 
