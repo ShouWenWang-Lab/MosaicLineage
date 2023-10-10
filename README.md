@@ -2,7 +2,7 @@
 
 A (mosaic) collection of python help functions related to lineage tracing data analysis, developed through the DARLIN project [L. Li,...,S.-W. Wang, F. Camargo, Cell (2023)](https://doi.org/10.1016/j.cell.2023.09.019).
 
-It is often used together with [cospar](https://cospar.readthedocs.io/en/latest/index.html)
+It is often used together with [cospar](https://cospar.readthedocs.io/en/latest/index.html).
 
 To install, run
 ```bash
@@ -42,4 +42,4 @@ The allele generation probability cutoff $\rho^*$ should depend on the size of i
 
 Finally, historically we have named CA, TA, RA as CC, TC, and RC. We have not corrected this terminology throughout this package, as well as the deposited raw and processed data in GEO: GSE222486.
 
-In other words, these terms are equivalent: `CC` <-> `CA`, `TC` <-> `TA`, `RC` <-> `RA`, 
+In other words, these terms are equivalent: `CC` <-> `CA`, `TC` <-> `TA`, `RC` <-> `RA`.
