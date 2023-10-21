@@ -12,8 +12,18 @@ pip install -r requirements.txt
 python setup.py develop
 ```
 
-Its usage can be examplified in the [notebooks for the DARLIN project](https://github.com/ShouWenWang-Lab/DARLIN_notebooks).
 
+## External links
+
+- A 30min video about DARLIN project in [Youtube](https://www.youtube.com/watch?v=TywIb_4cPk8) or [Bilibili](https://www.bilibili.com/video/BV1sw411F7hd/?spm_id_from=333.999.0.0&vd_source=88ba2b3e0a84657ca67330d8cba9e18f).
+
+- [Snakemake_DARLIN](https://github.com/ShouWenWang-Lab/snakemake_DARLIN), a Snakemake pipeline to automatically preprocess raw DARLIN sequencing data.
+
+- [Notebooks](https://github.com/ShouWenWang-Lab/DARLIN_notebooks) to reproduce Figure 4 and Figure 5 in our paper. It also illustrates how to use the MosaicLineage package there.
+
+- [Raw and intermediate data for these notebooks](https://zenodo.org/records/8422061).
+
+- [Shou-Wen Wang Lab website](https://www.shouwenwang-lab.com/)
 
 ## Reference allele bank
 
