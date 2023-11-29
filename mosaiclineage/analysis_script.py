@@ -57,8 +57,14 @@ def load_all_samples_to_adata(
 def merge_adata_across_times(
     adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scCamellia"
 ):
-    adata_t1_ = adata_t1.raw.to_adata()
-    adata_t2_ = adata_t2.raw.to_adata()
+    if adata_t1.raw is not None:
+        adata_t1_ = adata_t1.raw.to_adata()
+    else:
+        adata_t1_=adata_t1
+    if adata_t1.raw is not None:
+        adata_t2_ = adata_t2.raw.to_adata()
+    else:
+        adata_t2_=adata_t2
     adata_t1_.obsm[embed_key] = adata_t1_.obsm[embed_key] + X_shift
 
     adata_t1_.obs["time_info"] = ["1" for x in range(adata_t1_.shape[0])]
