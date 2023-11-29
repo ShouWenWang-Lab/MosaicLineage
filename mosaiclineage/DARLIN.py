@@ -1,13 +1,14 @@
 import gzip
 import os
 
-import mosaiclineage.util as util
 import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import yaml
 from Bio import SeqIO
 from scipy.io import loadmat
+
+import mosaiclineage.util as util
 
 #########################################
 
@@ -43,18 +44,27 @@ def consensus_sequence(df):
 
 
 def obtain_read_dominant_sequences(
-    df_input, cell_bc_key="cell_bc", clone_key="clone_id"
+    df_input, cell_bc_key="cell_bc", clone_key="clone_id", consider_seq_length=True,
 ):
     """
     Find the candidate sequence with the max read count within each group
+
+    This algorithm also consider sequence length. Each length will be treated differently
+
+     consider_seq_length=True. This is useful for CARLIN seq analysis
     """
 
-    df_input["CARLIN_length"] = df_input[clone_key].apply(lambda x: len(x))
+    if consider_seq_length:
+        group_list=[cell_bc_key, clone_key, "seq_length"]
+        df_input["seq_length"] = df_input[clone_key].apply(lambda x: len(x))
+    else:
+        group_list=[cell_bc_key, clone_key]
+
     df_CARLIN_lenth = (
-        df_input.groupby([cell_bc_key, clone_key, "CARLIN_length"])
-        .agg(read=("read", "sum"))
-        .reset_index()
-    )
+            df_input.groupby(group_list)
+            .agg(read=("read", "sum"))
+            .reset_index()
+        )
 
     df_dominant_fraction = (
         df_CARLIN_lenth.groupby([cell_bc_key])
@@ -68,7 +78,12 @@ def obtain_read_dominant_sequences(
     df_out = df_CARLIN_lenth.merge(
         df_dominant_fraction, on=[cell_bc_key, "read"], how="inner"
     )
-    return df_input.drop(["read", "CARLIN_length"], axis=1).merge(
+
+    if consider_seq_length:
+        drop_list=['read','seq_length']
+    else:
+        drop_list=['read']
+    return df_input.drop(drop_list, axis=1).merge(
         df_out, on=[cell_bc_key, clone_key]
     )
 
@@ -702,9 +717,8 @@ def assign_clone_id_by_integrating_locus(
     ```
     """
 
-    from tqdm import tqdm
-
     import scanpy as sc
+    from tqdm import tqdm
 
     df_sc_CARLIN = df_sc_CARLIN_raw[
         (df_sc_CARLIN_raw["normalized_count"] < prob_cutoff)
@@ -925,9 +939,8 @@ def assign_clone_id_by_integrating_locus_v1(
     ```
     """
 
-    from tqdm import tqdm
-
     import scanpy as sc
+    from tqdm import tqdm
 
     df_sc_CARLIN = df_sc_CARLIN_raw[
         (df_sc_CARLIN_raw["normalized_count"] < prob_cutoff)
