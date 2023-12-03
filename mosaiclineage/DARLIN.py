@@ -43,50 +43,6 @@ def consensus_sequence(df):
     return bytes(np.median(X, axis=0).astype("uint8")).decode("utf8")
 
 
-def obtain_read_dominant_sequences(
-    df_input, cell_bc_key="cell_bc", clone_key="clone_id", consider_seq_length=True,
-):
-    """
-    Find the candidate sequence with the max read count within each group
-
-    This algorithm also consider sequence length. Each length will be treated differently
-
-     consider_seq_length=True. This is useful for CARLIN seq analysis
-    """
-
-    if consider_seq_length:
-        group_list=[cell_bc_key, clone_key, "seq_length"]
-        df_input["seq_length"] = df_input[clone_key].apply(lambda x: len(x))
-    else:
-        group_list=[cell_bc_key, clone_key]
-
-    df_CARLIN_lenth = (
-            df_input.groupby(group_list)
-            .agg(read=("read", "sum"))
-            .reset_index()
-        )
-
-    df_dominant_fraction = (
-        df_CARLIN_lenth.groupby([cell_bc_key])
-        .agg(
-            read=("read", "max"),
-            max_read_ratio=("read", lambda x: np.max(x) / np.sum(x)),
-        )
-        .reset_index()
-    )
-
-    df_out = df_CARLIN_lenth.merge(
-        df_dominant_fraction, on=[cell_bc_key, "read"], how="inner"
-    )
-
-    if consider_seq_length:
-        drop_list=['read','seq_length']
-    else:
-        drop_list=['read']
-    return df_input.drop(drop_list, axis=1).merge(
-        df_out, on=[cell_bc_key, clone_key]
-    )
-
 
 def CARLIN_analysis(
     df_input, cell_bc_key="cell_bc", clone_key="clone_id", read_ratio_threshold=0.6

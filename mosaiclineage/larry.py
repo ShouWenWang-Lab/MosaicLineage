@@ -489,28 +489,29 @@ def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_report_for_inferred_clones(df_filter_reads, df_final):
+def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id'):
     fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     df_plot = (
-        df_filter_reads.groupby(["cell_id"])
+        df_filter_reads.groupby([selected_key])
         .agg(read=("read", "sum"), umi_count=("umi", lambda x: len(set(x))))
         .reset_index()
     )
     sns.scatterplot(data=df_plot, x="read", y="umi_count", ax=axs[0], label="raw")
     sns.scatterplot(
-        data=df_plot[df_plot["cell_id"].isin(df_final["cell_id"])],
+        data=df_plot[df_plot[selected_key].isin(df_final[selected_key])],
         x="read",
         y="umi_count",
         ax=axs[0],
         label="valid",
     )
     axs[0].legend()
+    axs[0].set_title(selected_key)
     axs[0].set_xscale("log")
     axs[0].set_yscale("log")
 
-    df_final["CARLIN_length"] = df_final["clone_id"].apply(lambda x: len(x))
+    df_final["clone_id_length"] = df_final["clone_id"].apply(lambda x: len(x))
     ax = sns.scatterplot(
-        data=df_final, y="CARLIN_length", x="read", ax=axs[1], color="#feb24c"
+        data=df_final, y="clone_id_length", x="read", ax=axs[1], color="#feb24c"
     )
     ax.set_xscale("log")
     plt.tight_layout()
@@ -566,6 +567,54 @@ def extract_putative_valid_cell_id(
     print(f"Identified {valid_cell_N} putative {cell_key}")
     return df_counts.query("valid==True")
 
+def obtain_read_dominant_sequences(
+    df_input, cell_bc_key="cell_bc", clone_key="clone_id", consider_seq_length=True,
+):
+    """
+    Find the candidate sequence with the max read count within each group
+
+    This algorithm also consider sequence length. Each length will be treated differently
+
+    consider_seq_length=True. This is useful for CARLIN seq analysis
+    """
+
+    if consider_seq_length:
+        group_list=[cell_bc_key, clone_key, "seq_length"]
+        df_input["seq_length"] = df_input[clone_key].apply(lambda x: len(x))
+        print('seq length')
+    else:
+        group_list=[cell_bc_key, clone_key]
+
+    df_CARLIN_lenth = (
+            df_input.groupby(group_list)
+            .agg(read=("read", "sum"))
+            .reset_index()
+        )
+    
+    # Identify the max read, and its fraction
+    df_dominant_fraction = (
+        df_CARLIN_lenth.groupby([cell_bc_key])
+        .agg(
+            read=("read", "max"),
+            max_read_ratio=("read", lambda x: np.max(x) / np.sum(x)),
+        )
+        .reset_index()
+    )
+
+    # Intersect with the full data to identify sequences with the max read 
+    # (multiple clone_id could be found within the same cell_id, if they both have the max read. 
+    # Say, clone_id_1 has 10 reads, and clone_id_2 also has 10 reads. 10 is the max. So, both clone_ID are retained
+    df_out = df_CARLIN_lenth.merge(
+        df_dominant_fraction, on=[cell_bc_key, "read"], how="inner"
+    )
+
+    if consider_seq_length:
+        drop_list=['read','seq_length']
+    else:
+        drop_list=['read']
+    return df_input.drop(drop_list, axis=1).merge(
+        df_out, on=[cell_bc_key, clone_key]
+    )
 
 def QC_read_per_molecule(
     df_input_0,
@@ -731,3 +780,11 @@ def rename_library_info(df_all, mapping_dictionary):
         df_all["library"][df_all.library == key] = mapping_dictionary[key]
     df_all.loc[:, "cell_id"] = df_all["library"] + "_" + df_all["cell_bc"]
     return df_all
+
+def compute_CloneBC_read_fraction_per_cell(df_input,cell_bc_key="cell_bc", clone_key="clone_id"):
+    df_out=df_input.filter([cell_bc_key,clone_key,'read']).groupby(cell_bc_key,group_keys=True).apply(
+    lambda df_x: df_x.filter([clone_key,'read']).assign(relative_read_fraction= lambda y:y['read']/y['read'].max()))
+
+    plt.subplots()
+    sns.histplot(df_out['relative_read_fraction'],log_scale=True)
+    return df_out

@@ -794,16 +794,26 @@ def generate_adata_allele_by_mutation(
 
 
 def keep_informative_cell_and_clones(
-    adata, clone_size_thresh=2, barcode_num_per_cell=1
+    adata, clone_size_thresh=2, max_barcode_num_per_cell=None,clone_key='X_clone',
 ):
     """
     Given an annadata object, select clones observed in more than one cells.
     and keep cells that have at least one clone
     """
-    clone_idx = (adata.X > 0).sum(0).A.flatten() >= clone_size_thresh
-    cell_idx = (adata.X[:, clone_idx] > 0).sum(1).A.flatten() >= barcode_num_per_cell
-    adata_new = adata[:, clone_idx][cell_idx]
-    adata_new.obsm["X_clone"] = adata_new.X
+    if clone_size_thresh is not None:
+        print(f'select clones with at least {clone_size_thresh} cells')
+        clone_idx = (adata.obsm[clone_key] > 0).sum(0).A.flatten() >= clone_size_thresh
+    else:
+        clone_idx=np.arange(adata.obsm[clone_key].shape[1])
+
+    if max_barcode_num_per_cell is not None:
+        print(f'sub-sample cells to keep cells with at most {max_barcode_num_per_cell} clonal barcodes')
+        cell_idx = (adata.obsm[clone_key] > 0).sum(1).A.flatten() <= max_barcode_num_per_cell
+    else:
+        cell_idx=np.arange(adata.shape[0])
+
+    adata_new=adata[cell_idx].copy()
+    adata_new.obsm[clone_key]=adata[cell_idx].obsm[clone_key][:,clone_idx]
     return adata_new
 
 
