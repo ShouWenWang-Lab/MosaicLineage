@@ -8,6 +8,7 @@ import yaml
 from Bio import SeqIO
 from scipy.io import loadmat
 
+import mosaiclineage.larry as larry
 import mosaiclineage.util as util
 
 #########################################
@@ -54,7 +55,7 @@ def CARLIN_analysis(
     """
 
     # df_dominant_fraction=calculate_read_fraction_for_dominant_sequences(df_input,cell_bc_key=cell_bc_key,clone_key=clone_key)
-    df_tmp = obtain_read_dominant_sequences(
+    df_tmp = larry.obtain_read_dominant_sequences(
         df_input, cell_bc_key=cell_bc_key, clone_key=clone_key
     )
     df_final = df_tmp[df_tmp["max_read_ratio"] > read_ratio_threshold]

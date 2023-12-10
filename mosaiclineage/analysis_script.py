@@ -57,10 +57,10 @@ def load_all_samples_to_adata(
 def merge_adata_across_times(
     adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scCamellia"
 ):
-   """
-   Adjust X_shift so that you get the best co-embedding of these two datasets. 
-   Note that X_shift will be applied permanently to adata_t1
-   """
+    """
+    Adjust X_shift so that you get the best co-embedding of these two datasets. 
+    Note that X_shift will be applied permanently to adata_t1
+    """
     if adata_t1.raw is not None:
         adata_t1_ = adata_t1.raw.to_adata()
     else:
