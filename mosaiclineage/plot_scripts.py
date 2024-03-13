@@ -273,15 +273,27 @@ def mutation_statistics_distribution_per_allele(
     )
 
     fig, ax = plt.subplots()
-    max_y=np.max([np.max(del_SB_hist_y),np.max(del_LL_hist_y)])
+    max_y = np.max([np.max(del_SB_hist_y), np.max(del_LL_hist_y)])
     ax1 = sns.lineplot(
-        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label_1,linewidth=1
+        x=del_SB_hist_x[:-1], y=del_SB_hist_y, label=label_1, linewidth=1
     )  # ,marker='o')
     ax = sns.lineplot(
-        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2,linewidth=1
+        x=del_LL_hist_x[:-1], y=del_LL_hist_y, label=label_2, linewidth=1
     )  # ,ax=ax,marker='o')
-    ax1.plot([np.median(del_length_SB),np.median(del_length_SB)],[0,0.7*max_y],'--',color='#1f77b4',linewidth=1)
-    ax.plot([np.median(del_length_LL),np.median(del_length_LL)],[0,0.7*max_y],'--',color='#ff7f0e',linewidth=1)
+    ax1.plot(
+        [np.median(del_length_SB), np.median(del_length_SB)],
+        [0, 0.7 * max_y],
+        "--",
+        color="#1f77b4",
+        linewidth=1,
+    )
+    ax.plot(
+        [np.median(del_length_LL), np.median(del_length_LL)],
+        [0, 0.7 * max_y],
+        "--",
+        color="#ff7f0e",
+        linewidth=1,
+    )
 
     # ax.set_xlim([-0.1,30])
     ax.set_xlabel("Total del. length per allele (bp)")
@@ -1372,7 +1384,7 @@ def three_locus_comparison_plots(
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
-                hue_order=["CC", "TC", "RC"],
+                hue_order=["CA", "TA", "RA"],
             )
             g.ax.set_ylabel(QC_x_label[j])
             g.ax.set_xlabel("")
@@ -1393,7 +1405,7 @@ def three_locus_comparison_plots(
                 kind="bar",
                 edgecolor=".6",
                 aspect=1.2,
-                hue_order=["CC", "TC", "RC"],
+                hue_order=["CA", "TA", "RA"],
             )
             g.ax.set_ylabel(performance_x_label[j])
             g.ax.set_xlabel("")
@@ -1974,7 +1986,7 @@ def visualize_sc_CARLIN_data(
     """
     For CARLIN pipeline output, run the following to get appropriate input
     ```python
-    df_merge=pd.concat([df_all_CC,df_all_TC,df_all_RC],ignore_index=True).fillna(0).query('invalid_alleles!=True')
+    df_merge=pd.concat([df_all_CA,df_all_TA,df_all_RA],ignore_index=True).fillna(0).query('invalid_alleles!=True')
     df_merge['locus']=df_merge['sample'].apply(lambda x: x[-2:])
     df_merge['CARLIN']=df_merge['locus']+'_'+df_merge['CARLIN']
     df_merge['allele']=df_merge['locus']+'_'+df_merge['allele']
@@ -1989,8 +2001,8 @@ def visualize_sc_CARLIN_data(
     df_sc_data = df_sc_data_input.copy()
     os.makedirs(figure_dir, exist_ok=True)
 
-    # locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
-    locus_map = {"CC": "CC", "TC": "TC", "RC": "RC", "locus": "locus"}
+    # locus_map = {"CA": "CA", "TA": "TA", "RA": "RA", "locus": "locus"}
+    locus_map = {"CA": "CA", "TA": "TA", "RA": "RA", "locus": "locus"}
     df_sc_data["locus"] = df_sc_data["locus"].map(locus_map)
     df_plot = (
         df_sc_data.groupby(["locus", "library"])
@@ -2012,7 +2024,7 @@ def visualize_sc_CARLIN_data(
         x="cell_number",
         y="clone_number",
         hue="locus",
-        hue_order=["CC", "TC", "RC"],
+        hue_order=["CA", "TA", "RA"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xlabel("Cell number")
@@ -2026,7 +2038,7 @@ def visualize_sc_CARLIN_data(
         x="library",
         y="clone_number",
         hue="locus",
-        hue_order=["CC", "TC", "RC"],
+        hue_order=["CA", "TA", "RA"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=45)
@@ -2041,7 +2053,7 @@ def visualize_sc_CARLIN_data(
         x="library",
         y="cell_number",
         hue="locus",
-        hue_order=["CC", "TC", "RC"],
+        hue_order=["CA", "TA", "RA"],
     )
     plt.legend(loc=[1.01, 0.3])
     plt.xticks(rotation=90)
@@ -2052,7 +2064,7 @@ def visualize_sc_CARLIN_data(
 
     single_cell_clonal_report(
         df_sc_data,
-        labels=["CC", "TC", "RC"],
+        labels=["CA", "TA", "RA"],
         selection_key="locus",
         data_des=data_des,
         figure_dir=figure_dir,
@@ -2081,7 +2093,7 @@ def visualize_sc_CARLIN_data(
                 x="read",
                 y="CARLIN_length",
                 hue="locus",
-                hue_order=["CC", "TC", "RC"],
+                hue_order=["CA", "TA", "RA"],
                 s=point_size,
             )
             plt.xscale("log")
@@ -2162,36 +2174,36 @@ def plot_fate_consistence(df_input, std=0.015, s=30, fate="MPP3-4"):
         df_input.filter(["RNA_id", "locus", fate])
         .drop_duplicates()
         .pivot(index="RNA_id", columns="locus", values=f"{fate}")
-        .rename(columns={"CC": "CC", "TC": "TC", "RC": "RC"})
+        .rename(columns={"CA": "CA", "TA": "TA", "RA": "RA"})
     ).reset_index()
     df_plot["source"] = df_plot["RNA_id"].apply(lambda x: x.split("_")[0])
-    df_plot_tmp = df_plot.filter(["CC", "TC", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["CA", "TA", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["CC"], std),
-        y=rand_jitter(df_plot_tmp["TC"], std),
+        x=rand_jitter(df_plot_tmp["CA"], std),
+        y=rand_jitter(df_plot_tmp["TA"], std),
         ax=axs[0],
         s=s,
         hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["CC", "RC", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["CA", "RA", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["CC"], std),
-        y=rand_jitter(df_plot_tmp["RC"], std),
+        x=rand_jitter(df_plot_tmp["CA"], std),
+        y=rand_jitter(df_plot_tmp["RA"], std),
         ax=axs[1],
         s=s,
         hue="source",
     )
     ax.set_xlim([-0.05, 1.1])
     ax.set_ylim([-0.05, 1.1])
-    df_plot_tmp = df_plot.filter(["TC", "RC", "source"]).dropna()
+    df_plot_tmp = df_plot.filter(["TA", "RA", "source"]).dropna()
     ax = sns.scatterplot(
         data=df_plot_tmp,
-        x=rand_jitter(df_plot_tmp["TC"], std),
-        y=rand_jitter(df_plot_tmp["RC"], std),
+        x=rand_jitter(df_plot_tmp["TA"], std),
+        y=rand_jitter(df_plot_tmp["RA"], std),
         ax=axs[2],
         s=s,
         hue="source",
@@ -2331,7 +2343,7 @@ def plot_joint_allele_frequency(
     df_1 = df_sc_CARLIN.pivot(
         index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
     )
-    for (a, b) in [("CC", "TC"), ("CC", "RC"), ("TC", "RC")]:
+    for a, b in [("CA", "TA"), ("CA", "RA"), ("TA", "RA")]:
         df_joint_locus = df_1[
             (~pd.isna(df_1[(clone_key, a)]))
             & (df_1[(clone_key, a)] != f"{a}_[]")
@@ -2360,12 +2372,12 @@ def plot_co_dtected_allele_number(df_sc_CARLIN, clone_key="allele"):
     )
     df_2 = pd.DataFrame(
         {
-            "CC_BC": df_1[(clone_key, "CC")],
-            "TC_BC": df_1[(clone_key, "TC")],
-            "RC_BC": df_1[(clone_key, "RC")],
-            "CC_prob": df_1[("normalized_count", "CC")],
-            "TC_prob": df_1[("normalized_count", "TC")],
-            "RC_prob": df_1[("normalized_count", "RC")],
+            "CC_BC": df_1[(clone_key, "CA")],
+            "TC_BC": df_1[(clone_key, "TA")],
+            "RC_BC": df_1[(clone_key, "RA")],
+            "CC_prob": df_1[("normalized_count", "CA")],
+            "TC_prob": df_1[("normalized_count", "TA")],
+            "RC_prob": df_1[("normalized_count", "RA")],
         },
         index=df_1.index,
     )
@@ -2387,7 +2399,7 @@ def plot_co_dtected_allele_number(df_sc_CARLIN, clone_key="allele"):
     def count_unique_bc(x):
         return len(set(x.dropna()))
 
-    for locus in ["CC", "TC", "RC"]:
+    for locus in ["CA", "TA", "RA"]:
         df_coupling = (
             df_allele[
                 (~pd.isna(df_allele[f"{locus}_BC"]))

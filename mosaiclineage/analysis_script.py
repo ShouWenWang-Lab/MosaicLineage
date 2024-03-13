@@ -58,17 +58,17 @@ def merge_adata_across_times(
     adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scCamellia"
 ):
     """
-    Adjust X_shift so that you get the best co-embedding of these two datasets. 
+    Adjust X_shift so that you get the best co-embedding of these two datasets.
     Note that X_shift will be applied permanently to adata_t1
     """
     if adata_t1.raw is not None:
         adata_t1_ = adata_t1.raw.to_adata()
     else:
-        adata_t1_=adata_t1
+        adata_t1_ = adata_t1
     if adata_t1.raw is not None:
         adata_t2_ = adata_t2.raw.to_adata()
     else:
-        adata_t2_=adata_t2
+        adata_t2_ = adata_t2
     adata_t1_.obsm[embed_key] = adata_t1_.obsm[embed_key] + X_shift
 
     adata_t1_.obs["time_info"] = ["1" for x in range(adata_t1_.shape[0])]
@@ -192,7 +192,7 @@ def load_and_annotate_sc_CARLIN_data(
     bulk_data_path: str,
     sample_map: dict = None,
     plate_map: dict = None,
-    locus: str = "CC",
+    locus: str = "CA",
     ref_dir: str = "/Users/shouwen/Dropbox (HMS)/shared_folder_with_Li/Analysis/CARLIN/data",
     sc_data_source: str = "SW",
 ):
@@ -236,7 +236,7 @@ def load_and_annotate_sc_CARLIN_data(
 
     """
 
-    if locus not in ["CC", "TC", "RC"]:
+    if locus not in ["CA", "TA", "RA"]:
         raise ValueError("locus should be in {'CC','TC','RC'}")
     if sc_data_source not in ["SW", "joint"]:
         raise ValueError("sc_data_source be in {'SW','joint'}")
@@ -301,7 +301,7 @@ def load_and_annotate_sc_CARLIN_data(
 def merge_scCARLIN_to_bulk_CARLIN(
     df_sc_data,
     bulk_data_path,
-    locus="CC",
+    locus="CA",
     BC_max_sample_count: int = 6,
     BC_max_freq: float = 2,
     min_clone_size: int = 3,
@@ -559,7 +559,7 @@ def integrate_early_clone_and_fate(
     df_clone_fate_tmp,
     SC_CARLIN_dir,
     plate_map,
-    locus="CC",
+    locus="CA",
     BC_max_sample_count=5,
     BC_max_freq=10 ** (-4),
     read_cutoff=2,
@@ -741,10 +741,11 @@ def annotate_adata_with_lineage_info(
     adata.obs["joint_clone_id_tmp"] = df_sc_data_HQ.drop_duplicates(
         subset="RNA_id"
     ).set_index("RNA_id")["joint_clone_id_tmp"]
-    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(subset="RNA_id").set_index(
-        "RNA_id"
-    )["joint_clone_id"]
+    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(
+        subset="RNA_id"
+    ).set_index("RNA_id")["joint_clone_id"]
     return adata
+
 
 ## This function is outdated. Mindful of how HQ clones are selected here
 def annotate_adata_with_bulk_lineage_fate(
@@ -792,9 +793,9 @@ def annotate_adata_with_bulk_lineage_fate(
     adata.obs["joint_clone_id_tmp"] = df_sc_data_HQ.drop_duplicates(
         subset="RNA_id"
     ).set_index("RNA_id")["joint_clone_id_tmp"]
-    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(subset="RNA_id").set_index(
-        "RNA_id"
-    )["joint_clone_id"]
+    adata.obs["joint_clone_id"] = df_sc_data_HQ.drop_duplicates(
+        subset="RNA_id"
+    ).set_index("RNA_id")["joint_clone_id"]
 
     if annotate_t1t2:
         if joint_clone_key not in df_sc_data_HQ.columns:
@@ -839,7 +840,7 @@ def annotate_adata_with_bulk_lineage_fate(
         # mapped_alleles=[ z for z in RNA_alleles_tmp if 'unmapped' not in z]
         # df_mapped_normX=df_fate_matrix_merge.loc[mapped_alleles].reset_index().rename(columns={'index':'allele'}).merge(df_sc_data_HQ,on='allele',how='left')
 
-        for locus in ["CC", "TC", "RC"]:
+        for locus in ["CA", "TA", "RA"]:
             adata.obs[f"{locus}_clone_id_t1"] = df_sc_data_HQ.filter(
                 ["RNA_id", "locus", joint_clone_key]
             ).pivot(index="RNA_id", columns="locus", values=joint_clone_key)[locus]
@@ -878,7 +879,7 @@ def annotate_adata_with_bulk_lineage_fate(
         ).astype(int)
 
         for fate in ["Mega", "Gr", "B", "Mono", "Ery", "MPP3-4", "LK"]:
-            for locus in ["CC", "TC", "RC"]:
+            for locus in ["CA", "TA", "RA"]:
                 adata.obs[f"{locus}-{fate}"] = (
                     df_sc_data_HQ_joint_with_fate.filter(["RNA_id", "locus", fate])
                     .drop_duplicates()

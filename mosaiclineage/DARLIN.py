@@ -44,7 +44,6 @@ def consensus_sequence(df):
     return bytes(np.median(X, axis=0).astype("uint8")).decode("utf8")
 
 
-
 def CARLIN_analysis(
     df_input, cell_bc_key="cell_bc", clone_key="clone_id", read_ratio_threshold=0.6
 ):
@@ -225,15 +224,15 @@ def CARLIN_preprocessing(
     if template.startswith("cCARLIN"):
         seq_5prime = CC_5prime
         seq_3prime = CC_3prime
-        CARLIN_seq_CC = CC_CARLIN
+        CARLIN_seq_CA = CC_CARLIN
     elif template.startswith("Tigre"):
         seq_5prime = TC_5prime
         seq_3prime = TC_3prime
-        CARLIN_seq_TC = TC_CARLIN
+        CARLIN_seq_TA = TC_CARLIN
     elif template.startswith("Rosa"):
         seq_5prime = RC_5prime
         seq_3prime = RC_3prime
-        CARLIN_seq_RC = RC_CARLIN
+        CARLIN_seq_RA = RC_CARLIN
     else:
         raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
@@ -427,76 +426,76 @@ def CARLIN_output_to_cell_by_barcode_long_table(df_input):
 
 
 def merge_three_locus(
-    data_path_CC,
-    data_path_RC,
-    data_path_TC=None,
-    sample_type_CC="CC",
-    sample_type_TC="RC",
-    sample_type_RC="TC",
+    data_path_CA,
+    data_path_RA,
+    data_path_TA=None,
+    sample_type_CA="CA",
+    sample_type_TA="RA",
+    sample_type_RA="TA",
 ):
     """
     Merge the 3 locus (CC,TC,RC) according to the sample info and
     convert to a wide table
 
-    data_path_CC:
+    data_path_CA:
         Path to CC locus root dir that contains all sample sub-folder,
         e.g. path/to/results_read_cutoff_3
-    sample_type_CC
+    sample_type_CA
     """
 
-    df_CC = pd.read_csv(
-        f"{data_path_CC}/merge_all/refined_results.csv", index_col=0
+    df_CA = pd.read_csv(
+        f"{data_path_CA}/merge_all/refined_results.csv", index_col=0
     ).sort_values("sample")
-    df_CC = df_CC[df_CC["sample"] != "merge_all"]
-    idx = np.argsort(df_CC["sample"])
-    df_CC = df_CC.iloc[idx]
-    df_CC["sample_id"] = np.arange(len(df_CC))
-    df_CC["Type"] = sample_type_CC
-    df_RC = pd.read_csv(
-        f"{data_path_RC}/merge_all/refined_results.csv", index_col=0
+    df_CA = df_CA[df_CA["sample"] != "merge_all"]
+    idx = np.argsort(df_CA["sample"])
+    df_CA = df_CA.iloc[idx]
+    df_CA["sample_id"] = np.arange(len(df_CA))
+    df_CA["Type"] = sample_type_CA
+    df_RA = pd.read_csv(
+        f"{data_path_RA}/merge_all/refined_results.csv", index_col=0
     ).sort_values("sample")
-    df_RC = df_RC[df_RC["sample"] != "merge_all"]
-    idx = np.argsort(df_RC["sample"])
-    df_RC = df_RC.iloc[idx]
-    df_RC["sample_id"] = np.arange(len(df_RC))
-    df_RC["Type"] = sample_type_TC
+    df_RA = df_RA[df_RA["sample"] != "merge_all"]
+    idx = np.argsort(df_RA["sample"])
+    df_RA = df_RA.iloc[idx]
+    df_RA["sample_id"] = np.arange(len(df_RA))
+    df_RA["Type"] = sample_type_TA
 
     x = "total_alleles"
-    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
-    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+    df_CA[f"{x}_norm_fraction"] = df_CA[x] / df_CA[x].sum()
+    df_RA[f"{x}_norm_fraction"] = df_RA[x] / df_RA[x].sum()
     x = "singleton"
-    df_CC[f"{x}_norm_fraction"] = df_CC[x] / df_CC[x].sum()
-    df_RC[f"{x}_norm_fraction"] = df_RC[x] / df_RC[x].sum()
+    df_CA[f"{x}_norm_fraction"] = df_CA[x] / df_CA[x].sum()
+    df_RA[f"{x}_norm_fraction"] = df_RA[x] / df_RA[x].sum()
 
-    if data_path_TC is not None:
-        df_TC = pd.read_csv(
-            f"{data_path_TC}/merge_all/refined_results.csv", index_col=0
+    if data_path_TA is not None:
+        df_TA = pd.read_csv(
+            f"{data_path_TA}/merge_all/refined_results.csv", index_col=0
         ).sort_values("sample")
-        df_TC = df_TC[df_TC["sample"] != "merge_all"]
-        idx = np.argsort(df_TC["sample"])
-        df_TC = df_TC.iloc[idx]
-        df_TC["sample_id"] = np.arange(len(df_TC))
-        df_TC["Type"] = sample_type_RC
+        df_TA = df_TA[df_TA["sample"] != "merge_all"]
+        idx = np.argsort(df_TA["sample"])
+        df_TA = df_TA.iloc[idx]
+        df_TA["sample_id"] = np.arange(len(df_TA))
+        df_TA["Type"] = sample_type_RA
 
         x = "total_alleles"
-        df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+        df_TA[f"{x}_norm_fraction"] = df_TA[x] / df_TA[x].sum()
         x = "singleton"
-        df_TC[f"{x}_norm_fraction"] = df_TC[x] / df_TC[x].sum()
+        df_TA[f"{x}_norm_fraction"] = df_TA[x] / df_TA[x].sum()
 
-        df_all = pd.concat([df_CC, df_RC, df_TC])
+        df_all = pd.concat([df_CA, df_RA, df_TA])
         df_sample_association = (
-            df_CC.filter(["sample_id", "sample"])
-            .merge(df_TC.filter(["sample_id", "sample"]), on="sample_id")
-            .merge(df_RC.filter(["sample_id", "sample"]), on="sample_id")
+            df_CA.filter(["sample_id", "sample"])
+            .merge(df_TA.filter(["sample_id", "sample"]), on="sample_id")
+            .merge(df_RA.filter(["sample_id", "sample"]), on="sample_id")
         )
     else:
-        df_all = pd.concat([df_CC, df_RC])
-        df_sample_association = df_CC.filter(["sample_id", "sample"]).merge(
-            df_RC.filter(["sample_id", "sample"]), on="sample_id"
+        df_all = pd.concat([df_CA, df_RA])
+        df_sample_association = df_CA.filter(["sample_id", "sample"]).merge(
+            df_RA.filter(["sample_id", "sample"]), on="sample_id"
         )
 
     df_sample_association = df_sample_association.rename(
-        columns={"sample_x": "CC", "sample_y": "TC", "sample": "RC"}
+        columns={"sample_x": "CA", "sample_y": "TA", "sample": "RA"}
     )
     return df_all, df_sample_association
 
@@ -522,27 +521,28 @@ def rename_lib(x, sample_name_format="LL"):
             x = "_".join(x.split("_")[:-1])  # remve _SX at the end of the lib name
 
         if (
-            ("-CC" in x)
-            or ("-TC" in x)
-            or ("-RC" in x)
-            or ("_CC" in x)
-            or ("_TC" in x)
-            or ("_RC" in x)
+            ("-CA" in x)
+            or ("-TA" in x)
+            or ("-RA" in x)
+            or ("_CA" in x)
+            or ("_TA" in x)
+            or ("_RA" in x)
         ):
             return x[:-3]
         elif (
-            ("CC-" in x)
-            or ("TC-" in x)
-            or ("RC-" in x)
-            or ("CC_" in x)
-            or ("TC_" in x)
-            or ("RC_" in x)
+            ("CA-" in x)
+            or ("TA-" in x)
+            or ("RA-" in x)
+            or ("CA_" in x)
+            or ("TA_" in x)
+            or ("RA_" in x)
         ):
             return x[2:]
         else:
             return x
     else:
         return x
+
 
 def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"):
     """
@@ -636,20 +636,19 @@ def assign_clone_id_by_integrating_locus(
     prob_cutoff=0.1,
     sample_count_cutoff=2,
     joint_allele_N_cutoff=6,
-    locus_list=["CC", "TC", "RC"],
+    locus_list=["CA", "TA", "RA"],
     clone_key="allele",
 ):
-
     """
     Integrate alleles from different locus to assign a common clone ID.
-    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CC_TC_RC alleles with a high frequency
+    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CA_TA_RA alleles with a high frequency
 
     Parameters
     ----------
         df_sc_CARLIN_raw:
             A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
         prob_cutoff:
-            The probability cutoff to use an allele to establish strong connection between two CC-TC-RC clone IDs
+            The probability cutoff to use an allele to establish strong connection between two CA-TA-RA clone IDs
         joint_allele_N_cutoff:
             An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
             we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
@@ -657,11 +656,11 @@ def assign_clone_id_by_integrating_locus(
     Returns
     -------
         df_assigned_clones:
-            A dataframe, each entry gives the assigned clone_id and its relation to the detected CC-TC-RC joint allele
+            A dataframe, each entry gives the assigned clone_id and its relation to the detected CA-TA-RA joint allele
         df_sc_CARLIN:
             Update the input df_sc_CARLIN to add columns: 'joint_clone_id', 'joint_prob', 'joint_allele_num'
         df_allele:
-            CC-TC-RC joint allele table
+            CA-TA-RA joint allele table
 
 
     ## example: this code helps to connect df_allele with df_assigned_clones for debugging
@@ -689,7 +688,7 @@ def assign_clone_id_by_integrating_locus(
     locus_BC_names = [f"{x}_BC" for x in locus_list]
     locus_prob_names = [f"{x}_prob" for x in locus_list]
 
-    ## extract the alleles, probabilities, and generate CC-TC-RC joint allele ID
+    ## extract the alleles, probabilities, and generate CA-TA-RA joint allele ID
     df_1 = df_sc_CARLIN.pivot(
         index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
     )
@@ -770,16 +769,16 @@ def assign_clone_id_by_integrating_locus(
 
         prob_matrix_list.append(prob_matrix_tmp)
 
-    ## calcualte the joint connectivity (probability) of the CC-TC-RC array
+    ## calcualte the joint connectivity (probability) of the CA-TA-RA array
     prob_matrix = prob_matrix_list[0]
     for __ in range(1, len(locus_list)):
         prob_matrix = prob_matrix * prob_matrix_list[__]  # multiply the 3 probability
 
     ## convert the joint connectivity matrix to a binarized similarity matrix by thresholding
     similarity_matrix = np.zeros((len(df_allele), len(df_allele)))
-    similarity_matrix[
-        prob_matrix < prob_cutoff
-    ] = 1  # strong connection by sharing rare alleles
+    similarity_matrix[prob_matrix < prob_cutoff] = (
+        1  # strong connection by sharing rare alleles
+    )
     similarity_matrix[prob_matrix >= prob_cutoff] = 0  # weak connection
     similarity_matrix[np.isnan(prob_matrix)] = np.nan  # mismatch
 
@@ -853,25 +852,24 @@ def assign_clone_id_by_integrating_locus_v1(
     prob_cutoff=0.1,
     sample_count_cutoff=2,
     joint_allele_N_cutoff=6,
-    locus_list=["CC", "TC", "RC"],
+    locus_list=["CA", "TA", "RA"],
     consider_mutation=True,
 ):
-
     """
     This version is based on additive coupling strength and leiden clustering
 
 
     Integrate alleles from different locus to assign a common clone ID.
-    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CC_TC_RC alleles with a high frequency
+    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CA_TA_RA alleles with a high frequency
 
     Parameters
     ----------
         df_sc_CARLIN:
             A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
         prob_cutoff:
-            The probability cutoff (<) to use an allele to establish strong connection between two CC-TC-RC clone IDs
+            The probability cutoff (<) to use an allele to establish strong connection between two CA-TA-RA clone IDs
         sample_count_cutoff:
-            Sample count cutoff (<) for an allele to be used to establish strong connection between two CC-TC-RC clone IDs
+            Sample count cutoff (<) for an allele to be used to establish strong connection between two CA-TA-RA clone IDs
         joint_allele_N_cutoff:
             An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
             we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
@@ -879,11 +877,11 @@ def assign_clone_id_by_integrating_locus_v1(
     Returns
     -------
         df_assigned_clones:
-            A dataframe, each entry gives the assigned clone_id and its relation to the detected CC-TC-RC joint allele
+            A dataframe, each entry gives the assigned clone_id and its relation to the detected CA-TA-RA joint allele
         df_sc_CARLIN:
             Update the input df_sc_CARLIN to add columns: 'joint_clone_id', 'joint_prob', 'joint_allele_num'
         df_allele:
-            CC-TC-RC joint allele table
+            CA-TA-RA joint allele table
 
 
     ## example: this code helps to connect df_allele with df_assigned_clones for debugging
@@ -912,7 +910,7 @@ def assign_clone_id_by_integrating_locus_v1(
     locus_BC_names = [f"{x}_BC" for x in locus_list]
     locus_prob_names = [f"{x}_prob" for x in locus_list]
 
-    ## extract the alleles, probabilities, and generate CC-TC-RC joint allele ID
+    ## extract the alleles, probabilities, and generate CA-TA-RA joint allele ID
     df_1 = df_sc_CARLIN.pivot(
         index="RNA_id", columns="locus", values=[clone_key, "normalized_count"]
     )
@@ -978,7 +976,7 @@ def assign_clone_id_by_integrating_locus_v1(
 
     ## establish the allele connectivity (measured by probability) matrix for CC,TC,RC separately
     similarity_matrix = np.zeros((len(df_allele), len(df_allele)))
-    for locus in ["CC", "TC", "RC"]:
+    for locus in ["CA", "TA", "RA"]:
 
         if consider_mutation:
             df_tmp = pd.DataFrame(df_allele[f"{locus}_BC"].dropna())
@@ -1068,18 +1066,18 @@ def assign_clone_id_by_integrating_locus_v1(
             matrix_X_inverse, mutation_value_matrix
         ).dot(matrix_X_inverse.T)
         similarity_matrix_tmp_undetect = np.zeros((len(df_allele), len(df_allele)))
-        similarity_matrix_tmp_undetect[
-            matrix_mask
-        ] = allele_similarity_matrix_undetect.flatten()
+        similarity_matrix_tmp_undetect[matrix_mask] = (
+            allele_similarity_matrix_undetect.flatten()
+        )
         similarity_matrix -= similarity_matrix_tmp_undetect
 
         # similarity_matrix_list.append(similarity_matrix_tmp)
 
     # similarity_matrix[similarity_matrix<kernel(prob_cutoff)]=0
     similarity_matrix_ps = similarity_matrix.copy()
-    similarity_matrix_ps[
-        similarity_matrix_ps < kernel(prob_cutoff)
-    ] = 0  # only consider positive weights for now
+    similarity_matrix_ps[similarity_matrix_ps < kernel(prob_cutoff)] = (
+        0  # only consider positive weights for now
+    )
 
     ####### WARN: only consider positive weights for now
     A = ssp.csr_matrix(similarity_matrix_ps)  # only consider positive weights for now
