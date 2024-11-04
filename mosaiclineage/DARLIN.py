@@ -106,7 +106,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
         seq_list = []
         seq_quality = []
         with gzip.open(
-            f"{data_path}/{sample}_L001_{seq_read}_001.fastq.gz", "rt"
+            f"{data_path}/{sample}/{sample}_{seq_read}.fastq.gz", "rt"
         ) as handle:
             for record in tqdm(SeqIO.parse(handle, "fastq")):
                 seq_list.append(str(record.seq))
@@ -116,7 +116,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
         tag_list = []
         tag_quality = []
         with gzip.open(
-            f"{data_path}/{sample}_L001_{tag_read}_001.fastq.gz", "rt"
+            f"{data_path}/{sample}/{sample}_{tag_read}.fastq.gz", "rt"
         ) as handle:
             for record in tqdm(SeqIO.parse(handle, "fastq")):
                 tag_list.append(str(record.seq))
