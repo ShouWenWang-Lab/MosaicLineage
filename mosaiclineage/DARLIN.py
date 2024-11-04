@@ -260,55 +260,71 @@ def CARLIN_preprocessing(
         raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
     seq_full = seq_5prime_full + CARLIN_seq + seq_3prime
-    print('Expected full seq',seq_full)
     df_output = df_input.copy()
     tot_fastq_N = len(df_output)
     print("Total fastq:", tot_fastq_N)
     seq_length = int(df_output['clone_id'].iloc[:100].apply(lambda x: len(x)).mean())
-    print(f'Fastq length: {seq_length}')
 
     if seq_5prime_upper_N is not None:
         seq_5prime = seq_5prime[-seq_5prime_upper_N:]
     if seq_3prime_upper_N is None:
         seq_3prime_upper_N=len(seq_3prime)
 
-    if seq_length>=len(seq_full):
-        if seq_3prime_upper_N is not None:
-            seq_3prime = seq_3prime[:seq_3prime_upper_N]
-    else:
-        seq_3prime = seq_full[:seq_length][-seq_3prime_upper_N:]
-        print(f'seq_3prime (insufficient length): {seq_3prime}')
-
+    seq_3prime_0 = seq_3prime[:seq_3prime_upper_N]
     df_output["Valid_5prime"] = df_output["clone_id"].apply(
         lambda x: (seq_5prime in x) 
     )
-    print(
-        f"% Fastq with vaid 5 prime: {np.mean(df_output['Valid_5prime'])}"
+    df_output["Valid_3prime_0"] = df_output["clone_id"].apply(
+        lambda x: (seq_3prime_0 in x) 
     )
-    df_output["Valid_3prime"] = df_output["clone_id"].apply(
-        lambda x: (seq_3prime in x)
-    )
-    df_output["Valid"]=df_output["Valid_5prime"] & df_output["Valid_3prime"]
+    if seq_length<len(seq_full): # insufficient sequencing length
+        print(f'Fastq length insufficient ({seq_length} bp)')
+        #print('Expected full seq',seq_full)
+        seq_3prime_1 = seq_full[:seq_length][-seq_3prime_upper_N:]
+        print(f'Trailing end sequence (if no editing): {seq_3prime_1}')
+        df_output["Valid_3prime_1"] = df_output["clone_id"].apply(
+            lambda x:  (seq_3prime_1 in x)
+        )
+        df_output["Valid_3prime"] = df_output["Valid_3prime_0"] | df_output["Valid_3prime_1"]
+    else:
+        df_output["Valid_3prime"] = df_output["Valid_3prime_0"]
+    
+    df_output["Valid"]=df_output["Valid_5prime"] & df_output["Valid_3prime"] 
     print(
-        f"% Fastq with vaid 3 prime: {np.mean(df_output['Valid_3prime'])}"
+        f"Fastq frac. with vaid 5 prime: {np.mean(df_output['Valid_5prime']):.3f}"
     )
     print(
-        f"% Fastq with vaid 5 and 3 prime: {np.mean(df_output['Valid'])}"
+        f"Fastq frac. with vaid 3 prime: {np.mean(df_output['Valid_3prime']):.3f}"
     )
 
     df_output = df_output.query("Valid==True")
-    valid_3_5_prime_N = len(df_output)
-    print(
-        f"Fastq with vaid 3 and 5 prime: {valid_3_5_prime_N} ({valid_3_5_prime_N/tot_fastq_N:.2f})"
-    )
     if ref_cell_barcodes is not None:
         df_output = df_output[df_output["cell_bc"].isin(ref_cell_barcodes)]
         valid_BC_N = len(df_output)
-        print(f"Fastq with valid barcodes: {valid_BC_N} ({valid_BC_N/tot_fastq_N:.2f})")
+        print(f"Fastq with valid barcodes: {valid_BC_N} ({valid_BC_N/tot_fastq_N:.3f})")
     
-    df_output["clone_id"] = df_output["clone_id"].apply(
-        lambda x: x.split(seq_5prime)[1].split(seq_3prime)[0]
+    df_output_0=df_output[df_output["Valid_3prime_0"]]
+    df_output_0["clone_id"] = df_output_0["clone_id"].apply(
+        lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0]
     )
+    if seq_length<len(seq_full): # insufficient sequencing length
+        df_output_1=df_output[df_output["Valid_3prime_1"] & (~df_output["Valid_3prime_0"])]
+        df_output_1["clone_id"] = df_output_1["clone_id"].apply(
+            lambda x: x.split(seq_5prime)[1].split(seq_3prime_1)[0]
+        )
+        # tral_sum=pd.isna(df_output_1["clone_id"]).sum()
+        # if tral_sum>0:
+        #     print(f'Tailing end occurs earlier than expected: {tral_sum/len(df_output_1):.3f}')
+        # df_output_1=df_output_1[~pd.isna(df_output_1["clone_id"])]
+        df_output=pd.concat([df_output_0,df_output_1])
+    else: # sufficient sequencing length
+        df_output=df_output_0
+    print(
+        f"Fastq frac. with vaid 3 and 5 prime: {len(df_output)/tot_fastq_N:.3f}"
+    )
+    #print(pd.isna(df_output['clone_id']).sum())
+    df_output=check_editing(df_output,template)
+    print(f"Edited fastq fraction: {df_output['edited'].mean():.3f}")
 
     df_output["unique_id"] = (
         df_output["cell_id"] + "_" + df_output["umi_id"] + "_" + df_output["clone_id"]
