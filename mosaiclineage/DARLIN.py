@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import yaml
+from tqdm import tqdm
 from Bio import SeqIO
 from scipy.io import loadmat
 
@@ -19,19 +20,19 @@ import mosaiclineage.util as util
 
 
 # define seqeunces and primers for QC. For each 5' sequence, we skip the first 2 bp, and for 3' sequence, we skip the last 2 bp, as they are prone to errors
-CA_5prime = (
-    "AGCTGTACAAGTAAGCGGC"  # full primer: GAGCTGTACAAGTAAGCGGC (single-cell & bulk)
-)
+CA_5prime = "AGCTGTACAAGTAAGCGGC"  
+
+CA_5prime_full = "GAGCTGTACAAGTAAGCGGC" # full primer: GAGCTGTACAAGTAAGCGGC (single-cell & bulk)
 CA_3prime = "AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCT"  # full primer: AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 CA_CARLIN = "CGCCGGACTGCACGACAGTCGACGATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATACGATACGCGCACGCTATGGAGTCGAGAGCGCGCTCGTCGACTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGAGTCGAGACGCTGACGATATGGAGTCGATACGTAGCACGCAGACGATGGGAGCT"
 
-TA_5prime = "TCGGTACCTCGCGAA"  # full primer: GCTCGGTACCTCGCGAAT (single-cell & bulk)
+TA_5prime = "TCGGTACCTCGCGAA"  
+TA_5prime_full = "GCTCGGTACCTCGCGAA" # full primer: GCTCGGTACCTCGCGAA (single-cell & bulk)
 TA_3prime = "GTCTTGTCGGTGCCTTCTAGTT"  # full primer: GTCTTGTCGGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 TA_CARLIN = "TCGCCGGAGTCGAGACGCTGACGATATGGAGTCGACACGACTCGCGCATACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGAGCGCGCTCGTCGACTATGGA"
 
-RA_5prime = (
-    "GTACAAGTAAAGCGGCC"  # full primer: ATGTACAAGTAAAGCGGCCG (single-cell & bulk)
-)
+RA_5prime = "GTACAAGTAAAGCGGCC" 
+RA_5prime_full = "ATGTACAAGTAAAGCGGCC"  # full primer:  (single-cell & bulk)
 RA_3prime = "GTCTGCTGTGTGCCTTCTAGTT"  # full primer: GTCTGCTGTGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 RA_CARLIN = "GCGCCGGCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGTCGAGACGCTGACGATATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGAGAGCGCGCTCGTCGACTATGGA"
 
@@ -47,6 +48,15 @@ def consensus_sequence(df):
     X = np.array([np.array(bytearray(x, encoding="utf8")) for x in df])
     return bytes(np.median(X, axis=0).astype("uint8")).decode("utf8")
 
+def check_editing(df,template):
+    if template.startswith("cCARLIN"):
+        CARLIN_seq = CA_CARLIN
+    elif template.startswith("Tigre"):
+        CARLIN_seq = TA_CARLIN
+    elif template.startswith("Rosa"):
+        CARLIN_seq = RA_CARLIN
+    df['edited']=df['clone_id'].apply(lambda x: not CARLIN_seq.startswith(x))
+    return df
 
 def CARLIN_analysis(
     df_input, cell_bc_key="cell_bc", clone_key="clone_id", read_ratio_threshold=0.6
@@ -98,7 +108,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
         with gzip.open(
             f"{data_path}/{sample}_L001_{seq_read}_001.fastq.gz", "rt"
         ) as handle:
-            for record in SeqIO.parse(handle, "fastq"):
+            for record in tqdm(SeqIO.parse(handle, "fastq")):
                 seq_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]
                 seq_quality.append(quality_tmp)
@@ -108,7 +118,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
         with gzip.open(
             f"{data_path}/{sample}_L001_{tag_read}_001.fastq.gz", "rt"
         ) as handle:
-            for record in SeqIO.parse(handle, "fastq"):
+            for record in tqdm(SeqIO.parse(handle, "fastq")):
                 tag_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]
                 tag_quality.append(quality_tmp)
@@ -129,7 +139,10 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
             lambda x: np.min(x[:bc_len])
         )
         df_seq["library"] = sample
-        df_seq["cell_id"] = df_seq["library"] + "_" + df_seq["cell_bc"]
+        cell_id = [
+            f"{x}_{y}" for x, y in zip(df_seq["library"].to_list(), df_seq["cell_bc"].to_list())
+        ]
+        df_seq["cell_id"] = cell_id
         df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[bc_len : (bc_len + umi_len)])
         df_seq["umi_quality_mean"] = df_seq["Tag_quality"].apply(
             lambda x: np.mean(x[bc_len : (bc_len + umi_len)])
@@ -137,7 +150,10 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
         df_seq["umi_quality_min"] = df_seq["Tag_quality"].apply(
             lambda x: np.min(x[bc_len : (bc_len + umi_len)])
         )
-        df_seq["umi_id"] = df_seq["cell_bc"] + "_" + df_seq["umi"]
+        umi_id = [
+            f"{x}_{y}" for x, y in zip(df_seq["cell_bc"].to_list(), df_seq["umi"].to_list())
+        ]
+        df_seq["umi_id"] = umi_id
         df_seq["clone_id"] = df_seq["Seq"]
         df_seq["clone_id_quality_mean"] = df_seq["Seq_quality"].apply(
             lambda x: np.mean(x)
@@ -227,30 +243,59 @@ def CARLIN_preprocessing(
 
     if template.startswith("cCARLIN"):
         seq_5prime = CA_5prime
+        seq_5prime_full = CA_5prime_full
         seq_3prime = CA_3prime
-        CARLIN_seq_CA = CA_CARLIN
+        CARLIN_seq = CA_CARLIN
     elif template.startswith("Tigre"):
         seq_5prime = TA_5prime
+        seq_5prime_full = TA_5prime_full
         seq_3prime = TA_3prime
-        CARLIN_seq_TA = TA_CARLIN
+        CARLIN_seq = TA_CARLIN
     elif template.startswith("Rosa"):
         seq_5prime = RA_5prime
+        seq_5prime_full = RA_5prime_full
         seq_3prime = RA_3prime
-        CARLIN_seq_RA = RA_CARLIN
+        CARLIN_seq = RA_CARLIN
     else:
         raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
-    if seq_5prime_upper_N is not None:
-        seq_5prime = seq_5prime[-seq_5prime_upper_N:]
-    if seq_3prime_upper_N is not None:
-        seq_3prime = seq_3prime[:seq_3prime_upper_N]
-
+    seq_full = seq_5prime_full + CARLIN_seq + seq_3prime
+    print('Expected full seq',seq_full)
     df_output = df_input.copy()
-    df_output["Valid"] = df_output["clone_id"].apply(
-        lambda x: (seq_5prime in x) & (seq_3prime in x)
-    )
     tot_fastq_N = len(df_output)
     print("Total fastq:", tot_fastq_N)
+    seq_length = int(df_output['clone_id'].iloc[:100].apply(lambda x: len(x)).mean())
+    print(f'Fastq length: {seq_length}')
+
+    if seq_5prime_upper_N is not None:
+        seq_5prime = seq_5prime[-seq_5prime_upper_N:]
+    if seq_3prime_upper_N is None:
+        seq_3prime_upper_N=len(seq_3prime)
+
+    if seq_length>=len(seq_full):
+        if seq_3prime_upper_N is not None:
+            seq_3prime = seq_3prime[:seq_3prime_upper_N]
+    else:
+        seq_3prime = seq_full[:seq_length][-seq_3prime_upper_N:]
+        print(f'seq_3prime (insufficient length): {seq_3prime}')
+
+    df_output["Valid_5prime"] = df_output["clone_id"].apply(
+        lambda x: (seq_5prime in x) 
+    )
+    print(
+        f"% Fastq with vaid 5 prime: {np.mean(df_output['Valid_5prime'])}"
+    )
+    df_output["Valid_3prime"] = df_output["clone_id"].apply(
+        lambda x: (seq_3prime in x)
+    )
+    df_output["Valid"]=df_output["Valid_5prime"] & df_output["Valid_3prime"]
+    print(
+        f"% Fastq with vaid 3 prime: {np.mean(df_output['Valid_3prime'])}"
+    )
+    print(
+        f"% Fastq with vaid 5 and 3 prime: {np.mean(df_output['Valid'])}"
+    )
+
     df_output = df_output.query("Valid==True")
     valid_3_5_prime_N = len(df_output)
     print(
@@ -260,10 +305,11 @@ def CARLIN_preprocessing(
         df_output = df_output[df_output["cell_bc"].isin(ref_cell_barcodes)]
         valid_BC_N = len(df_output)
         print(f"Fastq with valid barcodes: {valid_BC_N} ({valid_BC_N/tot_fastq_N:.2f})")
-
+    
     df_output["clone_id"] = df_output["clone_id"].apply(
         lambda x: x.split(seq_5prime)[1].split(seq_3prime)[0]
     )
+
     df_output["unique_id"] = (
         df_output["cell_id"] + "_" + df_output["umi_id"] + "_" + df_output["clone_id"]
     )
