@@ -50,11 +50,11 @@ def consensus_sequence(df):
 
 def check_editing(df,template):
     if template.startswith("cCARLIN"):
-        CARLIN_seq = CA_CARLIN
+        CARLIN_seq = CA_CARLIN + CA_3prime # for insufficient length, the 3' end is not splitted.
     elif template.startswith("Tigre"):
-        CARLIN_seq = TA_CARLIN
+        CARLIN_seq = TA_CARLIN + TA_3prime
     elif template.startswith("Rosa"):
-        CARLIN_seq = RA_CARLIN
+        CARLIN_seq = RA_CARLIN + RA_3prime
     df['edited']=df['clone_id'].apply(lambda x: not CARLIN_seq.startswith(x))
     return df
 
@@ -280,10 +280,8 @@ def CARLIN_preprocessing(
     if seq_length<len(seq_full): # insufficient sequencing length
         print(f'Fastq length insufficient ({seq_length} bp)')
         #print('Expected full seq',seq_full)
-        seq_3prime_1 = seq_full[:seq_length][-seq_3prime_upper_N:]
-        print(f'Trailing end sequence (if no editing): {seq_3prime_1}')
         df_output["Valid_3prime_1"] = df_output["clone_id"].apply(
-            lambda x:  (seq_3prime_1 in x)
+            lambda x:  x[-seq_3prime_upper_N:] in seq_full
         )
         df_output["Valid_3prime"] = df_output["Valid_3prime_0"] | df_output["Valid_3prime_1"]
     else:
@@ -307,15 +305,13 @@ def CARLIN_preprocessing(
     df_output_0["clone_id"] = df_output_0["clone_id"].apply(
         lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0]
     )
+    df_output_0["remove_3prime"]=True
     if seq_length<len(seq_full): # insufficient sequencing length
         df_output_1=df_output[df_output["Valid_3prime_1"] & (~df_output["Valid_3prime_0"])]
         df_output_1["clone_id"] = df_output_1["clone_id"].apply(
-            lambda x: x.split(seq_5prime)[1].split(seq_3prime_1)[0]
+            lambda x: x.split(seq_5prime)[1]
         )
-        # tral_sum=pd.isna(df_output_1["clone_id"]).sum()
-        # if tral_sum>0:
-        #     print(f'Tailing end occurs earlier than expected: {tral_sum/len(df_output_1):.3f}')
-        # df_output_1=df_output_1[~pd.isna(df_output_1["clone_id"])]
+        df_output_1["remove_3prime"]= False
         df_output=pd.concat([df_output_0,df_output_1])
     else: # sufficient sequencing length
         df_output=df_output_0
