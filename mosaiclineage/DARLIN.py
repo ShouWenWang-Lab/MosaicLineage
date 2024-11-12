@@ -81,9 +81,14 @@ def CARLIN_analysis(
     return df_final
 
 
-def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
+def CARLIN_raw_reads(data_path, sample, protocol="scCamellia",fastq_format=0):
     """
     Load raw fastq files. This function will depend on what protocol is used.
+
+    if fastq_format==0:
+        file_name=f"{data_path}/{sample}_{Rx}.fastq.gz"
+    else:
+        file_name=f"{data_path}/{sample}_L001_{Rx}_001.fastq.gz"
     """
     # supported_protocol = ["scCamellia", "sc10xV3"]
     # if not (protocol in supported_protocol):
@@ -105,9 +110,15 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
 
         seq_list = []
         seq_quality = []
-        with gzip.open(
-            f"{data_path}/{sample}/{sample}_{seq_read}.fastq.gz", "rt"
-        ) as handle:
+
+        def get_file_name(Rx):
+            if fastq_format==0:
+                file_name=f"{data_path}/{sample}_{Rx}.fastq.gz"
+            else:
+                file_name=f"{data_path}/{sample}_L001_{Rx}_001.fastq.gz"
+            return file_name
+        
+        with gzip.open(get_file_name(seq_read), "rt") as handle:
             for record in tqdm(SeqIO.parse(handle, "fastq")):
                 seq_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]
@@ -115,9 +126,7 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia"):
 
         tag_list = []
         tag_quality = []
-        with gzip.open(
-            f"{data_path}/{sample}/{sample}_{tag_read}.fastq.gz", "rt"
-        ) as handle:
+        with gzip.open(get_file_name(tag_read), "rt") as handle:
             for record in tqdm(SeqIO.parse(handle, "fastq")):
                 tag_list.append(str(record.seq))
                 quality_tmp = record.letter_annotations["phred_quality"]

@@ -567,6 +567,48 @@ def extract_putative_valid_cell_id(
     print(f"Identified {valid_cell_N} putative {cell_key}")
     return df_counts.query("valid==True")
 
+# def filter_clone_quality_by_read_count(df_input,min_reads_per_allele_group=1):
+#     def filter_tmp(df):
+#         #readcutoff_0=np.max([min_reads_per_allele_group,0.1*df['read'].max()])
+#         readcutoff_1=np.max([min_reads_per_allele_group,0.01*df['read'].max()])
+#         df.loc[(df['read']>=readcutoff_1),'status']=True #| df['cell_id'].isin(df_valid_cells['cell_id'].unique())
+#         #df.loc[((df['read']>=readcutoff_1) | df['cell_id'].isin(df_valid_cells['cell_id'].unique())) & (df['read']<readcutoff_0),'status' ]=True #'Plausible' 
+#         df.loc[pd.isna(df['status']),'status']=False
+#         return df[df['status']]
+#     return df_input.groupby('clone_id',group_keys=False).apply(filter_tmp)
+    
+def calculate_read_fraction_per_clone_cell(df_input,cell_bc_key='cell_id',clone_key='clone_id',norm_mode='max'):
+    """
+    norm_mode: 'max' or 'sum'
+    """
+    
+    if 'total_read_per_cell' in df_input.columns:
+        df_input=df_input.drop('total_read_per_cell',axis=1)
+    if 'total_read_per_clone' in df_input.columns:
+        df_input=df_input.drop('total_read_per_clone',axis=1)
+        
+    # Identify the max read, and its fraction
+    df_cell_read = (
+        df_input.groupby([cell_bc_key])
+        .agg(
+            read=("read", norm_mode)
+        )
+        .reset_index()
+    ).rename(columns={'read':'total_read_per_cell'})
+
+    df_clone_read = (
+        df_input.groupby([clone_key])
+        .agg(
+            read=("read", norm_mode)
+        )
+        .reset_index()
+    ).rename(columns={'read':'total_read_per_clone'})
+    
+    df_output=df_input.merge(df_cell_read,on=cell_bc_key).merge(df_clone_read,on=clone_key)
+    df_output['cell_read_fraction']=df_output['read']/df_output['total_read_per_cell']
+    df_output['clone_read_fraction']=df_output['read']/df_output['total_read_per_clone']
+    return df_output
+
 def obtain_read_dominant_sequences(
     df_input, cell_bc_key="cell_bc", clone_key="clone_id", consider_seq_length=True,
 ):
