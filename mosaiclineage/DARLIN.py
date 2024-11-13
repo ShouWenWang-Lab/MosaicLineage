@@ -917,6 +917,77 @@ def assign_clone_id_by_integrating_locus(
         df_allele.filter(locus_BC_names + ["joint_clone_id_tmp"]),
     )
 
+def assign_clone_id_with_Jaccard_similarity(cell_by_mutation_matrix, cell_label,similarity_threshold=0.6):
+    """
+        df_wide = df_final_all.pivot(index='cell_id', columns='clone_id', values='read')
+        ## generate cell-cell similarity matrix in terms of shared barcode number (then binarize)
+        Cell_2_Clone_Matrix=np.nan_to_num(df_wide.to_numpy())
+        Cell_2_Clone_Matrix=(Cell_2_Clone_Matrix>0).astype(int)
+        
+        
+        
+        cell_by_mutation_matrix: a normal numpy matrix
+    """
+    import scipy.sparse as ssp
+    from scipy.sparse.csgraph import connected_components
+    
+    Cell_2_Clone_sparse=ssp.csr_matrix(cell_by_mutation_matrix)
+    X_shared_BC_N=Cell_2_Clone_sparse.dot(Cell_2_Clone_sparse.T)
+    X_shared_BC_N=X_shared_BC_N.A
+
+    # compute the barcode number of a cell
+    cell_BC_N_vector=cell_by_mutation_matrix.sum(1)
+
+    # compute the cell-cell total barcode number matrix: BC_N_from_cell_1 + BC_N_from_cell_2
+    # Note that this is NOT the number of unique barcodes
+    one_vector=np.ones(len(cell_BC_N_vector))
+    column_matrix=cell_BC_N_vector[:,np.newaxis].T*one_vector[:,np.newaxis]
+    row_matrix=column_matrix.T
+    Total_BC_N_matrix=column_matrix+row_matrix
+
+    # Now compute the number of unique barcodes by substrating the number of shared barcodes
+    Total_unique_BC_N_matrix=Total_BC_N_matrix-X_shared_BC_N
+
+    # Now, compute the Jaccard similarity between two cells
+    X_similarity=X_shared_BC_N/Total_unique_BC_N_matrix
+    
+    
+    # thresholding the matrix
+    X_similarity_binarized=(X_similarity>similarity_threshold).astype(int)
+    
+    
+    ## partition the graph from the discretized similarity matrix into different components
+    n_components, labels = connected_components(X_similarity_binarized, directed=False)
+
+    ## convert the classified clones into an annotated dataframe
+    df_assigned_clones = (
+        pd.DataFrame({"BC_id": np.arange(len(labels)), "clone_id": labels})
+        .groupby("clone_id")
+        .agg(
+            cell_id_list=("BC_id", lambda x: list(set(x))),
+            clone_size=("BC_id", lambda x: len(set(x))),
+        )
+    )
+    
+    orig_cell_BC_array=np.array(cell_label)
+    df_assigned_clones["orig_cell_id"] = df_assigned_clones["cell_id_list"].apply(
+        lambda x: list(
+            orig_cell_BC_array[x]
+        )
+    )
+    df_clone_final=df_assigned_clones.reset_index().filter(['clone_id','orig_cell_id']).explode('orig_cell_id')
+    df_clone_final['clone_id']='clone_'+df_clone_final['clone_id'].astype(str)
+    
+    
+    # if plot:
+    #     import seaborn as sns
+    #     from matplotlib import pyplot as plt
+    #     max_clone_N=df_assigned_clones['clone_size'].max()
+    #     non_solo_clone_N=len(df_assigned_clones[df_assigned_clones['clone_size']>2])
+    #     sns.histplot(df_assigned_clones['clone_size'],log_scale=False)
+    #     plt.title(f'non_solo_clone N: {non_solo_clone_N}; Max clone size: {max_clone_N}',fontsize=10)
+
+    return df_clone_final, df_assigned_clones
 
 def assign_clone_id_by_integrating_locus_v1(
     df_sc_CARLIN_raw,
