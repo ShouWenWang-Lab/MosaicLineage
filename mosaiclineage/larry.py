@@ -489,20 +489,21 @@ def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id'):
+def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id',marker_size=10):
     fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     df_plot = (
         df_filter_reads.groupby([selected_key])
         .agg(read=("read", "sum"), umi_count=("umi", lambda x: len(set(x))))
         .reset_index()
     )
-    sns.scatterplot(data=df_plot, x="read", y="umi_count", ax=axs[0], label="raw")
+    sns.scatterplot(data=df_plot, x="read", y="umi_count", ax=axs[0], label="raw",s=marker_size)
     sns.scatterplot(
         data=df_plot[df_plot[selected_key].isin(df_final[selected_key])],
         x="read",
         y="umi_count",
         ax=axs[0],
         label="valid",
+        s=marker_size,
     )
     axs[0].legend()
     axs[0].set_title(selected_key)
@@ -511,7 +512,7 @@ def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_i
 
     df_final["clone_id_length"] = df_final["clone_id"].apply(lambda x: len(x))
     ax = sns.scatterplot(
-        data=df_final, y="clone_id_length", x="read", ax=axs[1], color="#feb24c"
+        data=df_final, y="clone_id_length", x="read", ax=axs[1], color="#feb24c",s=marker_size
     )
     ax.set_xscale("log")
     plt.tight_layout()
