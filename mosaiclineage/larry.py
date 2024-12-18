@@ -716,11 +716,9 @@ def QC_read_per_molecule(
 def estimate_read_cutoff(df_count):
     df_sort=df_count.sort_values('read_cutoff',ascending=False)
     data=df_sort['cell_id_count'].to_list()
-    print(data)
     flag=False
 
     for j in range(len(data)-2):
-        print(f'{data[j]}, {data[j+1]}, {data[j+2]}')
         if (data[j]+data[j+2])>2.5*data[j+1]:
             if (j-2>=0):
                 if (data[j]<1.2*data[j-1]) & (data[j-1]<1.2*data[j-2]):
