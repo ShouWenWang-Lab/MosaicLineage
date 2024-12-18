@@ -712,15 +712,37 @@ def QC_read_per_molecule(
         if log_scale:
             plt.yscale("log")
 
+def estimate_read_cutoff(df_count):
+    df_sort=df_count.sort_values('read_cutoff',ascending=False)
+    data=df_sort['cell_id_count'].to_list()
+    print(data)
+    flag=False
 
-def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=2, log_scale=True):
+    for j in range(len(data)-2):
+        print(f'{data[j]}, {data[j+1]}, {data[j+2]}')
+        if (data[j]+data[j+2])>2.5*data[j+1]:
+            if (j-2>=0):
+                if (data[j]<1.2*data[j-1]) & (data[j-1]<1.2*data[j-2]):
+                    read_cutoff=df_sort['read_cutoff'].to_list()[j+1]
+                    flag=True
+                    print('flag=True')
+                    break
+    if flag==False:
+        read_cutoff=df_sort['read_cutoff'].to_list()[-1]
+    
+    return read_cutoff
+
+def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale=True):
     max_read = df["read"].max()
     upper_log2 = np.ceil(np.log(max_read) / np.log(base))
     read_cutoff_list = []
     unique_count = []
     for x in range(int(upper_log2)):
-        read_cutoff = base**x
+        read_cutoff = int(base**x)
         read_cutoff_list.append(read_cutoff)
+    read_cutoff_list=sorted(set(read_cutoff_list))
+    
+    for read_cutoff in read_cutoff_list:
         df_temp = df[df["read"] >= read_cutoff].reset_index()
         temp_list = []
         for key in target_keys:
@@ -737,6 +759,11 @@ def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=2, log_scale=T
             plt.xscale("log")
             plt.yscale("log")
         ax.set_ylabel(f"Unique {key} number")
+
+    df_stat=pd.DataFrame({'read_cutoff':read_cutoff_list})
+    for j, key in enumerate(target_keys):
+        df_stat[f'{key}_count']=unique_count[:, j]
+    return df_stat
 
 
 def plot_seq_distance(distance, **kwargs):
