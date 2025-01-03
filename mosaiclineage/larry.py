@@ -118,7 +118,7 @@ def denoise_clonal_data(
     read_cutoff:
         Only use sequences >= this read_cutoff
     denoise_method:
-        "Hamming", or "UMI_tools". The "Hamming" method works better.
+        "Hamming", "UMI_tools" or "alignment". The "Hamming" method works better.
     per_sample:
         denoise for each sample sepaerately, where we adjust the read threshold per sample.
         This can be cell or library.  The right input could be: None, 'cell_id', 'library'
@@ -489,7 +489,7 @@ def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id',marker_size=10):
+def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id',title='',marker_size=10):
     fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     df_plot = (
         df_filter_reads.groupby([selected_key])
@@ -506,7 +506,7 @@ def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_i
         s=marker_size,
     )
     axs[0].legend()
-    axs[0].set_title(selected_key)
+    axs[0].set_title(title)
     axs[0].set_xscale("log")
     axs[0].set_yscale("log")
 
@@ -724,10 +724,9 @@ def estimate_read_cutoff(df_count):
                 if (data[j]<1.2*data[j-1]) & (data[j-1]<1.2*data[j-2]):
                     read_cutoff=df_sort['read_cutoff'].to_list()[j+1]
                     flag=True
-                    print('flag=True')
                     break
     if flag==False:
-        read_cutoff=df_sort['read_cutoff'].to_list()[-1]
+        read_cutoff=3 #df_sort['read_cutoff'].to_list()[-1]
     
     return read_cutoff
 
