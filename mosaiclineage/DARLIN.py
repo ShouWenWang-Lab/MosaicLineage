@@ -50,12 +50,19 @@ def consensus_sequence(df):
 
 def check_editing(df,template):
     if template.startswith("cCARLIN"):
-        CARLIN_seq = CA_CARLIN + CA_3prime # for insufficient length, the 3' end is not splitted.
+        CARLIN_seq = CA_CARLIN  # for insufficient length, the 3' end is not splitted.
     elif template.startswith("Tigre"):
-        CARLIN_seq = TA_CARLIN + TA_3prime
+        CARLIN_seq = TA_CARLIN
     elif template.startswith("Rosa"):
-        CARLIN_seq = RA_CARLIN + RA_3prime
-    df['edited']=df['clone_id'].apply(lambda x: not CARLIN_seq.startswith(x))
+        CARLIN_seq = RA_CARLIN
+    # if length is None:
+    #     length=np.max(df['clone_id'].apply(lambda x: len(x)))
+    #     if length> len(CARLIN_seq):
+    #         length=len(CARLIN_seq)
+    # print(f'Use expected full length for unedited BC: {length}')
+    df['edited']=df['clone_id'].apply(lambda x: not (CARLIN_seq.startswith(x)))
+    editing_efficiency=df.groupby('cell_id').agg({'edited':'mean'}).mean()['edited']
+    print(f'Editing efficiency: {editing_efficiency:.3f}')
     return df
 
 def CARLIN_analysis(
@@ -250,29 +257,52 @@ def CARLIN_preprocessing(
     # 3' end sequences, for QC. Only reads contain exactly this sequence will pass QC.
     #     The beginning of the 3' end sequences mark the end of CARLIN sequences.
 
-    if template.startswith("cCARLIN"):
-        seq_5prime = CA_5prime
-        seq_5prime_full = CA_5prime_full
-        seq_3prime = CA_3prime
-        CARLIN_seq = CA_CARLIN
-    elif template.startswith("Tigre"):
-        seq_5prime = TA_5prime
-        seq_5prime_full = TA_5prime_full
-        seq_3prime = TA_3prime
-        CARLIN_seq = TA_CARLIN
-    elif template.startswith("Rosa"):
-        seq_5prime = RA_5prime
-        seq_5prime_full = RA_5prime_full
-        seq_3prime = RA_3prime
-        CARLIN_seq = RA_CARLIN
-    else:
-        raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
-
-    seq_full = seq_5prime_full + CARLIN_seq + seq_3prime
     df_output = df_input.copy()
     tot_fastq_N = len(df_output)
     print("Total fastq:", tot_fastq_N)
     seq_length = int(df_output['clone_id'].iloc[:100].apply(lambda x: len(x)).mean())
+    if seq_length<300:
+        use_short_3prime=True
+        print('Use short primer')
+    else:
+        use_short_3prime=False
+    
+    if template.startswith("cCARLIN"):
+        seq_5prime = CA_5prime
+        seq_5prime_full = CA_5prime_full
+        CARLIN_seq = CA_CARLIN
+        if use_short_3prime:
+            seq_3prime='TGGGAGCTAGAA' #TT
+            appendix='TGGGAGCT'
+        else:
+            seq_3prime = CA_3prime
+            appendix=''
+    elif template.startswith("Tigre"):
+        seq_5prime = TA_5prime
+        seq_5prime_full = TA_5prime_full
+        CARLIN_seq = TA_CARLIN
+        if use_short_3prime:
+            seq_3prime='TGGAGTCTTG' #TC
+            appendix='TGGA'
+        else:
+            seq_3prime = TA_3prime
+            appendix=''
+    elif template.startswith("Rosa"):
+        seq_5prime = RA_5prime
+        seq_5prime_full = RA_5prime_full
+        CARLIN_seq = RA_CARLIN
+        if use_short_3prime:
+            seq_3prime='TGGAGTCTGC' # TG
+            appendix='TGGA'
+        else:
+            seq_3prime = RA_3prime
+            appendix=''
+    else:
+        raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
+
+
+    seq_full = seq_5prime_full + CARLIN_seq + seq_3prime[len(appendix):]
+    print('seq_full:',seq_full)
 
     if seq_5prime_upper_N is not None:
         seq_5prime = seq_5prime[-seq_5prime_upper_N:]
@@ -312,15 +342,15 @@ def CARLIN_preprocessing(
     
     df_output_0=df_output[df_output["Valid_3prime_0"]]
     df_output_0["clone_id"] = df_output_0["clone_id"].apply(
-        lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0]
+        lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0]+appendix
     )
-    df_output_0["remove_3prime"]=True
+    df_output_0["3prime_detected"]=True
     if seq_length<len(seq_full): # insufficient sequencing length
         df_output_1=df_output[df_output["Valid_3prime_1"] & (~df_output["Valid_3prime_0"])]
         df_output_1["clone_id"] = df_output_1["clone_id"].apply(
             lambda x: x.split(seq_5prime)[1]
         )
-        df_output_1["remove_3prime"]= False
+        df_output_1["3prime_detected"]= False
         df_output=pd.concat([df_output_0,df_output_1])
     else: # sufficient sequencing length
         df_output=df_output_0
@@ -329,7 +359,6 @@ def CARLIN_preprocessing(
     )
     #print(pd.isna(df_output['clone_id']).sum())
     df_output=check_editing(df_output,template)
-    print(f"Edited fastq fraction: {df_output['edited'].mean():.3f}")
 
     df_output["unique_id"] = (
         df_output["cell_id"] + "_" + df_output["umi_id"] + "_" + df_output["clone_id"]
@@ -348,6 +377,7 @@ def CARLIN_preprocessing(
                 "clone_id",
                 "unique_id",
                 "Valid",
+                "3prime_detected",
             ]
         )
         .merge(df_tmp, on="unique_id")
