@@ -713,22 +713,37 @@ def QC_read_per_molecule(
         if log_scale:
             plt.yscale("log")
 
-def estimate_read_cutoff(df_count):
-    df_sort=df_count.sort_values('read_cutoff',ascending=False)
-    data=df_sort['cell_id_count'].to_list()
-    flag=False
+# def estimate_read_cutoff(df_count):
+#     df_sort=df_count.sort_values('read_cutoff',ascending=False)
+#     data=df_sort['cell_id_count'].to_list()
+#     flag=False
 
-    for j in range(len(data)-2):
-        if (data[j]+data[j+2])>2.5*data[j+1]:
-            if (j-2>=0):
-                if (data[j]<1.2*data[j-1]) & (data[j-1]<1.2*data[j-2]):
-                    read_cutoff=df_sort['read_cutoff'].to_list()[j+1]
-                    flag=True
-                    break
-    if flag==False:
-        read_cutoff=3 #df_sort['read_cutoff'].to_list()[-1]
+#     for j in range(len(data)-2):
+#         if (data[j]+data[j+2])>2.5*data[j+1]:
+#             if (j-2>=0):
+#                 if (data[j]<1.2*data[j-1]) & (data[j-1]<1.2*data[j-2]):
+#                     read_cutoff=df_sort['read_cutoff'].to_list()[j+1]
+#                     flag=True
+#                     break
+#     if flag==False:
+#         read_cutoff=3 #df_sort['read_cutoff'].to_list()[-1]
     
-    return read_cutoff
+#     return read_cutoff
+
+def estimate_read_cutoff(df):
+    df = df.sort_values('read_cutoff').reset_index(drop=True)
+    
+    df['difference'] = df['cell_id_count'].diff()
+    df['slope_change'] = df['difference'].diff()
+
+    result = 7  
+    for i in range(1, len(df)-1):
+        current = abs(df.loc[i, 'slope_change'])
+        next_val = abs(df.loc[i+1, 'slope_change'])
+        if current < 5 and next_val < 5:
+            result = df.loc[i, 'read_cutoff']
+            break
+    return result
 
 def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale=True):
     max_read = df["read"].max()
