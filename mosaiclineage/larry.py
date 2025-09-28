@@ -736,14 +736,14 @@ def estimate_read_cutoff(df):
     df['difference'] = df['cell_id_count'].diff()
     df['slope_change'] = df['difference'].diff()
 
-    result = 7  
+    read_cutoff = 7  
     for i in range(1, len(df)-1):
         current = abs(df.loc[i, 'slope_change'])
         next_val = abs(df.loc[i+1, 'slope_change'])
         if current < 5 and next_val < 5:
-            result = df.loc[i, 'read_cutoff']
+            read_cutoff = df.loc[i, 'read_cutoff']
             break
-    return result
+    return read_cutoff
 
 def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale=True):
     max_read = df["read"].max()
