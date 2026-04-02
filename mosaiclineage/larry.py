@@ -33,14 +33,27 @@ from umi_tools import UMIClusterer
 
 def generate_LARRY_read_count_table(data_path, sample_list, recompute=False):
     """
-    From f"{data_path}/{lib}.LARRY.fastq.gz" --> f"{data_path}/{lib}.LARRY.csv"
-    where the read number of each molecular is calculated.
+    Generate read count table from LARRY fastq files.
 
-    We use cell barcode + sample id to jointly update the cell_id tag
-    We use the cell barcode + umi to jointly define the umi_id tag
+    Converts from f"{data_path}/{lib}.LARRY.fastq.gz" to f"{data_path}/{lib}.LARRY.csv",
+    where read counts are calculated for each molecule.
 
-    We first load all data into memory before extract the read information. This assumes that
-    the data is not too big to fit into the memory (<10G ?)
+    Cell barcode + sample ID jointly define the cell_id tag.
+    Cell barcode + UMI jointly define the umi_id tag.
+
+    Parameters
+    ----------
+    data_path : str
+        Path to data directory containing fastq files.
+    sample_list : list
+        List of sample/library names to process.
+    recompute : bool, optional
+        Whether to recompute even if CSV exists. Default is False.
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame with read counts for all samples.
     """
 
     df_list = []
@@ -104,38 +117,40 @@ def denoise_clonal_data(
 ):
     """
     Denoise sequencing/PCR errors at a particular field.
-    At the end, it generates a QC plot in terms of the sequence separation
 
-    Parameters:
-    -----------
-    df_raw:
-        The raw data table, each row is a unique molecular, identified by
-        ["library", "cell_id", "cell_bc", "clone_id", "umi"], with a 'read' indicating
-        its read number. The raw data can be output from `generate_LARRY_read_count_table`,
-        or `CARLIN.CARLIN_raw_reads` (typically further filtered by CARLIN.CARLIN_preprocessing)
-    target_key:
-        The target field to correct sequeuncing/PCR errors.
-    read_cutoff:
-        Only use sequences >= this read_cutoff
-    denoise_method:
-        "Hamming", "UMI_tools" or "alignment". The "Hamming" method works better.
-    per_sample:
-        denoise for each sample sepaerately, where we adjust the read threshold per sample.
-        This can be cell or library.  The right input could be: None, 'cell_id', 'library'
-    distance_threshold:
-        distances to connect two sequences.
-    whiteList:
-        Only works for the method "Hamming"
-    plot_report:
-        Show the report of correction, like clone size etc
-    group_keys:
-        A list of keys to aggregate the sequences and sum over the read counts
-    progress_bar:
-        show progress bar
+    Generates a QC plot showing sequence separation at the end.
 
-    Returns:
-    --------
-    The corrected sequence is updated at df_out
+    Parameters
+    ----------
+    df_raw : pd.DataFrame
+        Raw data table where each row is a unique molecule identified by
+        ["library", "cell_id", "cell_bc", "clone_id", "umi"] with a 'read' column
+        indicating read count. Can be from `generate_LARRY_read_count_table` or
+        `CARLIN.CARLIN_raw_reads`.
+    target_key : str, optional
+        Field to correct. Default is "clone_id".
+    read_cutoff : int, optional
+        Minimum read count threshold. Default is 3.
+    per_sample : str, optional
+        Denoise per sample ('cell_id' or 'library'). Default is None.
+    denoise_method : str, optional
+        Method for denoising: "Hamming" or "UMI_tools". Default is "Hamming".
+    distance_threshold : int, optional
+        Hamming distance to connect two sequences.
+    whiteList : list, optional
+        Known good sequences for "Hamming" method.
+    plot_report : bool, optional
+        Show correction report. Default is True.
+    group_keys : list, optional
+        Keys to aggregate sequences and sum read counts. Default is
+        ["library", "cell_id", "cell_bc", "clone_id", "umi"].
+    progress_bar : bool, optional
+        Show progress bar. Default is True.
+
+    Returns
+    -------
+    pd.DataFrame
+        Corrected data with updated sequences.
     """
 
     df_input = df_raw.copy()
@@ -220,19 +235,32 @@ def denoise_sequence(
     progress_bar=True,
 ):
     """
-    Take the sequences, make a unique list, and order them by read count. The input_seqs does not need
-    to be unique. We will aggregate the read count for the same sequence. From top to bottom, we iteratively find its similar sequences in the rest of the sequence pool, and remove them.
+    Denoise sequences by clustering similar sequences and selecting the most abundant.
 
-    Note that the output seq list could contain 'nan' if whitelist is used
+    Takes sequences, creates a unique list ordered by read count. For each sequence,
+    finds similar sequences within the distance threshold and merges them.
 
-    sequence distance <= 'distance_threshold' are connected
+    Parameters
+    ----------
+    input_seqs : array-like
+        List of sequences (can contain duplicates).
+    read_count : array-like, optional
+        Read counts for each sequence. If None, assumes count of 1.
+    distance_threshold : int, optional
+        Maximum distance for connecting sequences. Default is 1.
+    method : str, optional
+        Denoising method: "Hamming", "UMI_tools", or "alignment". Default is "Hamming".
+    whiteList : list, optional
+        Known good sequences (only for "Hamming" method).
+    progress_bar : bool, optional
+        Show progress bar. Default is True.
 
-    Parameters:
-    -----------
-    method:
-        "Hamming",  "UMI_tools", "alignment"
-    seq_list:
-        can be a list with duplicate sequences, indicating the read abundance of the read
+    Returns
+    -------
+    mapping : dict
+        Dictionary mapping each sequence to its corrected representative.
+    new_seq_list : ndarray
+        Array of corrected sequences.
     """
 
     if method not in ["Hamming", "UMI_tools", "alignment"]:
@@ -296,9 +324,9 @@ def denoise_sequence(
                     abs_id = cur_ids[k]
                     seq_tmp = unique_seq_list[abs_id]
                     mapping[seq_tmp] = cur_seq
-                    remaining_seq_idx[
-                        abs_id
-                    ] = False  # switch to idx to prevent modifying id list dynamically
+                    remaining_seq_idx[abs_id] = (
+                        False  # switch to idx to prevent modifying id list dynamically
+                    )
 
                 if np.sum(remaining_seq_idx) <= 0:
                     break
@@ -319,9 +347,9 @@ def denoise_sequence(
                         abs_id = cur_ids[k]
                         seq_tmp = unique_seq_list[abs_id]
                         mapping[seq_tmp] = cur_seq
-                        remaining_seq_idx[
-                            abs_id
-                        ] = False  # switch to idx to prevent modifying id list dynamically
+                        remaining_seq_idx[abs_id] = (
+                            False  # switch to idx to prevent modifying id list dynamically
+                        )
                 else:
                     mapping[cur_seq] = cur_seq
 
@@ -373,9 +401,9 @@ def denoise_sequence(
                 abs_id = cur_ids[k]
                 seq_tmp = unique_seq_list[abs_id]
                 mapping[seq_tmp] = cur_seq
-                remaining_seq_idx[
-                    abs_id
-                ] = False  # switch to idx to prevent modifying id list dynamically
+                remaining_seq_idx[abs_id] = (
+                    False  # switch to idx to prevent modifying id list dynamically
+                )
 
             if np.sum(remaining_seq_idx) <= 0:
                 break
@@ -409,13 +437,29 @@ def QC_read_coverage(df, target_key="clone_id", log_scale=True, **kwargs):
 
 def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=False):
     """
-    First, remove duplicate sequences
+    Calculate Hamming distance between sequences in kmer space.
 
-    We partition the sequence into Kmers
-    eg. 'ABCDEF', Kmers=2 -> ['AB','CD','EF']
-    Then, calculate the Hamming distance in the kmer space
+    First removes duplicate sequences, then partitions each sequence into Kmers
+    (e.g., 'ABCDEF' with Kmer=2 becomes ['AB', 'CD', 'EF']), and calculates
+    Hamming distance in the kmer space.
 
-    This calculation is exact, and can be slow for large amount of sequences
+    This calculation is exact and can be slow for large numbers of sequences.
+
+    Parameters
+    ----------
+    source_seqs_0 : array-like
+        Source sequences.
+    target_seqs_0 : array-like, optional
+        Target sequences. If None, uses source_seqs_0.
+    Kmer : int, optional
+        Kmer size for partitioning. Default is 1.
+    deduplicate : bool, optional
+        Whether to remove duplicates first. Default is False.
+
+    Returns
+    -------
+    distance : ndarray
+        Distance matrix between source and target sequences.
     """
 
     if deduplicate:
@@ -445,7 +489,23 @@ def QC_sequence_distance(source_seqs_0, target_seqs_0=None, Kmer=1, deduplicate=
 
 def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
     """
-    Get Number of clonal bc per cell
+    Get number of clonal barcodes per cell.
+
+    Parameters
+    ----------
+    df0 : pd.DataFrame
+        Input DataFrame with 'cell_id', 'clone_id', and 'read' columns.
+    read_cutoff : int, optional
+        Minimum read count threshold. Default is 3.
+    plot : bool, optional
+        Whether to plot the histogram. Default is True.
+    **kwargs
+        Additional arguments passed to seaborn.histplot.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with clonal barcode counts per cell.
     """
     df = df0[df0["read"] >= read_cutoff]
     df_statis = (
@@ -464,6 +524,32 @@ def QC_clonal_bc_per_cell(df0, read_cutoff=3, plot=True, **kwargs):
 def QC_clonal_reports(
     df, title=None, file_path=None, data_des="", save=False, **kwargs
 ):
+    """
+    Generate clonal QC reports including clone size and clonal barcode per cell.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with 'clone_id', 'cell_id', and 'read' columns.
+    title : str, optional
+        Figure title.
+    file_path : str, optional
+        Path to save figure.
+    data_des : str, optional
+        Description for filename.
+    save : bool, optional
+        Whether to save the figure. Default is False.
+    **kwargs
+        Additional arguments passed to plotting functions.
+    """
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+    QC_clone_size(df, read_cutoff=0, ax=axs[0], **kwargs)
+    QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
+    if title is not None:
+        fig.suptitle(title, fontsize=16)
+    if save:
+        plt.tight_layout()
+        fig.savefig(os.path.join(file_path, "clonal_reports" + data_des + ".pdf"))
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
     QC_clone_size(df, read_cutoff=0, ax=axs[0], **kwargs)
     QC_clonal_bc_per_cell(df, read_cutoff=0, ax=axs[1], **kwargs)
@@ -475,6 +561,25 @@ def QC_clonal_reports(
 
 
 def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
+    """
+    Calculate clone size (number of cells per clone).
+
+    Parameters
+    ----------
+    df0 : pd.DataFrame
+        Input DataFrame with 'clone_id', 'cell_id', and 'read' columns.
+    read_cutoff : int, optional
+        Minimum read count threshold. Default is 3.
+    plot : bool, optional
+        Whether to plot the histogram. Default is True.
+    **kwargs
+        Additional arguments passed to seaborn.histplot.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with clone sizes per clone.
+    """
     df = df0[df0["read"] >= read_cutoff]
     df_statis = (
         df.groupby("clone_id")
@@ -489,14 +594,18 @@ def QC_clone_size(df0, read_cutoff=3, plot=True, **kwargs):
     return df_statis
 
 
-def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_id',title='',marker_size=10):
+def QC_report_for_inferred_clones(
+    df_filter_reads, df_final, selected_key="cell_id", title="", marker_size=10
+):
     fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     df_plot = (
         df_filter_reads.groupby([selected_key])
         .agg(read=("read", "sum"), umi_count=("umi", lambda x: len(set(x))))
         .reset_index()
     )
-    sns.scatterplot(data=df_plot, x="read", y="umi_count", ax=axs[0], label="raw",s=marker_size)
+    sns.scatterplot(
+        data=df_plot, x="read", y="umi_count", ax=axs[0], label="raw", s=marker_size
+    )
     sns.scatterplot(
         data=df_plot[df_plot[selected_key].isin(df_final[selected_key])],
         x="read",
@@ -512,7 +621,12 @@ def QC_report_for_inferred_clones(df_filter_reads, df_final,selected_key='cell_i
 
     df_final["clone_id_length"] = df_final["clone_id"].apply(lambda x: len(x))
     ax = sns.scatterplot(
-        data=df_final, y="clone_id_length", x="read", ax=axs[1], color="#feb24c",s=marker_size
+        data=df_final,
+        y="clone_id_length",
+        x="read",
+        ax=axs[1],
+        color="#feb24c",
+        s=marker_size,
     )
     ax.set_xscale("log")
     plt.tight_layout()
@@ -527,20 +641,35 @@ def extract_putative_valid_cell_id(
     null_slope=1,
 ):
     """
-    Identify putative valid cell barcodes
-    If a cell barcode is generated due to mutation error, this cell barcode should come from random mutation from all possible sources,
-    and each read should be different, e.g., having a different UMI structure. So, the read number of the cell barcode should be ~ proportional
-    to the umi count for this cell barcode under this null hypothesis.
+    Identify putative valid cell barcodes.
 
-    On the other hand, if a cell barcode is true, then apart from sequences due to random mutations, a major component of it should come with just
-    a few umi. So, the total umi_count should be much lower than the read cout for this cell barcode.
+    If a cell barcode is generated due to mutation error, it should come from random
+    mutations and each read should be different (different UMI structure). Under this
+    null hypothesis, the read count should be proportional to the UMI count.
 
-    This assumes that a cell barcode has relatively abundant reads. Otherwise, it may masked by noise. So, this method only identifies
-    highly reliable cell_id. You can identify more cell_ids by using the clone_id information.
+    If a cell barcode is true, apart from random mutations, a major component should
+    have just a few UMIs. So the total umi_count should be much lower than the read
+    count for that cell barcode.
 
-    This is more true to cell_id than clone_id. For cell_id, each cell_id differs exactly 4bp (equal distance).
-    It seems that when the sequencing or PCR makes a mistake a cell_id, it also makes a mistake at UMI. This correlation is non-trivial.
-    It seems that once a mistake is made, it will continue to make mistakes.
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with cell and UMI information.
+    umi_key : str, optional
+        Column name for UMI. Default is "umi".
+    cell_key : str, optional
+        Column name for cell ID. Default is "cell_id".
+    log_scale : bool, optional
+        Use log scale for plotting. Default is True.
+    signal_threshold : float, optional
+        Threshold for valid cell identification. Default is 2.
+    null_slope : float, optional
+        Slope of null hypothesis line. Default is 1.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame of valid cells passing the threshold.
     """
 
     df_temp = df_input.groupby([cell_key, umi_key]).sum("read").reset_index()
@@ -568,72 +697,90 @@ def extract_putative_valid_cell_id(
     print(f"Identified {valid_cell_N} putative {cell_key}")
     return df_counts.query("valid==True")
 
+
 # def filter_clone_quality_by_read_count(df_input,min_reads_per_allele_group=1):
 #     def filter_tmp(df):
 #         #readcutoff_0=np.max([min_reads_per_allele_group,0.1*df['read'].max()])
 #         readcutoff_1=np.max([min_reads_per_allele_group,0.01*df['read'].max()])
 #         df.loc[(df['read']>=readcutoff_1),'status']=True #| df['cell_id'].isin(df_valid_cells['cell_id'].unique())
-#         #df.loc[((df['read']>=readcutoff_1) | df['cell_id'].isin(df_valid_cells['cell_id'].unique())) & (df['read']<readcutoff_0),'status' ]=True #'Plausible' 
+#         #df.loc[((df['read']>=readcutoff_1) | df['cell_id'].isin(df_valid_cells['cell_id'].unique())) & (df['read']<readcutoff_0),'status' ]=True #'Plausible'
 #         df.loc[pd.isna(df['status']),'status']=False
 #         return df[df['status']]
 #     return df_input.groupby('clone_id',group_keys=False).apply(filter_tmp)
-    
-def calculate_read_fraction_per_clone_cell(df_input,cell_bc_key='cell_id',clone_key='clone_id',norm_mode='max'):
+
+
+def calculate_read_fraction_per_clone_cell(
+    df_input, cell_bc_key="cell_id", clone_key="clone_id", norm_mode="max"
+):
     """
     norm_mode: 'max' or 'sum'
     """
-    
-    if 'total_read_per_cell' in df_input.columns:
-        df_input=df_input.drop('total_read_per_cell',axis=1)
-    if 'total_read_per_clone' in df_input.columns:
-        df_input=df_input.drop('total_read_per_clone',axis=1)
-        
+
+    if "total_read_per_cell" in df_input.columns:
+        df_input = df_input.drop("total_read_per_cell", axis=1)
+    if "total_read_per_clone" in df_input.columns:
+        df_input = df_input.drop("total_read_per_clone", axis=1)
+
     # Identify the max read, and its fraction
     df_cell_read = (
-        df_input.groupby([cell_bc_key])
-        .agg(
-            read=("read", norm_mode)
-        )
-        .reset_index()
-    ).rename(columns={'read':'total_read_per_cell'})
+        df_input.groupby([cell_bc_key]).agg(read=("read", norm_mode)).reset_index()
+    ).rename(columns={"read": "total_read_per_cell"})
 
     df_clone_read = (
-        df_input.groupby([clone_key])
-        .agg(
-            read=("read", norm_mode)
-        )
-        .reset_index()
-    ).rename(columns={'read':'total_read_per_clone'})
-    
-    df_output=df_input.merge(df_cell_read,on=cell_bc_key).merge(df_clone_read,on=clone_key)
-    df_output['cell_read_fraction']=df_output['read']/df_output['total_read_per_cell']
-    df_output['clone_read_fraction']=df_output['read']/df_output['total_read_per_clone']
+        df_input.groupby([clone_key]).agg(read=("read", norm_mode)).reset_index()
+    ).rename(columns={"read": "total_read_per_clone"})
+
+    df_output = df_input.merge(df_cell_read, on=cell_bc_key).merge(
+        df_clone_read, on=clone_key
+    )
+    df_output["cell_read_fraction"] = (
+        df_output["read"] / df_output["total_read_per_cell"]
+    )
+    df_output["clone_read_fraction"] = (
+        df_output["read"] / df_output["total_read_per_clone"]
+    )
     return df_output
 
+
 def obtain_read_dominant_sequences(
-    df_input, cell_bc_key="cell_bc", clone_key="clone_id", consider_seq_length=True,
+    df_input,
+    cell_bc_key="cell_bc",
+    clone_key="clone_id",
+    consider_seq_length=True,
 ):
     """
-    Find the candidate sequence with the max read count within each group
+    Find candidate sequences with maximum read count within each group.
 
-    This algorithm also consider sequence length. Each length will be treated differently
+    This algorithm also considers sequence length - each length is treated separately.
 
-    consider_seq_length=True. This is useful for CARLIN seq analysis
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'read' column.
+    cell_bc_key : str, optional
+        Column name for cell barcode. Default is "cell_bc".
+    clone_key : str, optional
+        Column name for clone ID. Default is "clone_id".
+    consider_seq_length : bool, optional
+        Whether to consider sequence length. Default is True (useful for CARLIN).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with dominant sequences per cell.
     """
 
     if consider_seq_length:
-        group_list=[cell_bc_key, clone_key, "seq_length"]
+        group_list = [cell_bc_key, clone_key, "seq_length"]
         df_input["seq_length"] = df_input[clone_key].apply(lambda x: len(x))
-        print('seq length')
+        print("seq length")
     else:
-        group_list=[cell_bc_key, clone_key]
+        group_list = [cell_bc_key, clone_key]
 
     df_CARLIN_lenth = (
-            df_input.groupby(group_list)
-            .agg(read=("read", "sum"))
-            .reset_index()
-        )
-    
+        df_input.groupby(group_list).agg(read=("read", "sum")).reset_index()
+    )
+
     # Identify the max read, and its fraction
     df_dominant_fraction = (
         df_CARLIN_lenth.groupby([cell_bc_key])
@@ -644,20 +791,19 @@ def obtain_read_dominant_sequences(
         .reset_index()
     )
 
-    # Intersect with the full data to identify sequences with the max read 
-    # (multiple clone_id could be found within the same cell_id, if they both have the max read. 
+    # Intersect with the full data to identify sequences with the max read
+    # (multiple clone_id could be found within the same cell_id, if they both have the max read.
     # Say, clone_id_1 has 10 reads, and clone_id_2 also has 10 reads. 10 is the max. So, both clone_ID are retained
     df_out = df_CARLIN_lenth.merge(
         df_dominant_fraction, on=[cell_bc_key, "read"], how="inner"
     )
 
     if consider_seq_length:
-        drop_list=['read','seq_length']
+        drop_list = ["read", "seq_length"]
     else:
-        drop_list=['read']
-    return df_input.drop(drop_list, axis=1).merge(
-        df_out, on=[cell_bc_key, clone_key]
-    )
+        drop_list = ["read"]
+    return df_input.drop(drop_list, axis=1).merge(df_out, on=[cell_bc_key, clone_key])
+
 
 def QC_read_per_molecule(
     df_input_0,
@@ -713,6 +859,7 @@ def QC_read_per_molecule(
         if log_scale:
             plt.yscale("log")
 
+
 # def estimate_read_cutoff(df_count):
 #     df_sort=df_count.sort_values('read_cutoff',ascending=False)
 #     data=df_sort['cell_id_count'].to_list()
@@ -727,23 +874,25 @@ def QC_read_per_molecule(
 #                     break
 #     if flag==False:
 #         read_cutoff=3 #df_sort['read_cutoff'].to_list()[-1]
-    
+
 #     return read_cutoff
 
-def estimate_read_cutoff(df):
-    df = df.sort_values('read_cutoff').reset_index(drop=True)
-    
-    df['difference'] = df['cell_id_count'].diff()
-    df['slope_change'] = df['difference'].diff()
 
-    read_cutoff = 7  
-    for i in range(1, len(df)-1):
-        current = abs(df.loc[i, 'slope_change'])
-        next_val = abs(df.loc[i+1, 'slope_change'])
+def estimate_read_cutoff(df):
+    df = df.sort_values("read_cutoff").reset_index(drop=True)
+
+    df["difference"] = df["cell_id_count"].diff()
+    df["slope_change"] = df["difference"].diff()
+
+    read_cutoff = 7
+    for i in range(1, len(df) - 1):
+        current = abs(df.loc[i, "slope_change"])
+        next_val = abs(df.loc[i + 1, "slope_change"])
         if current < 5 and next_val < 5:
-            read_cutoff = df.loc[i, 'read_cutoff']
+            read_cutoff = df.loc[i, "read_cutoff"]
             break
     return read_cutoff
+
 
 def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale=True):
     max_read = df["read"].max()
@@ -753,8 +902,8 @@ def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale
     for x in range(int(upper_log2)):
         read_cutoff = int(base**x)
         read_cutoff_list.append(read_cutoff)
-    read_cutoff_list=sorted(set(read_cutoff_list))
-    
+    read_cutoff_list = sorted(set(read_cutoff_list))
+
     for read_cutoff in read_cutoff_list:
         df_temp = df[df["read"] >= read_cutoff].reset_index()
         temp_list = []
@@ -773,9 +922,9 @@ def QC_unique_cells(df, target_keys=["cell_id", "clone_id"], base=1.5, log_scale
             plt.yscale("log")
         ax.set_ylabel(f"Unique {key} number")
 
-    df_stat=pd.DataFrame({'read_cutoff':read_cutoff_list})
+    df_stat = pd.DataFrame({"read_cutoff": read_cutoff_list})
     for j, key in enumerate(target_keys):
-        df_stat[f'{key}_count']=unique_count[:, j]
+        df_stat[f"{key}_count"] = unique_count[:, j]
     return df_stat
 
 
@@ -806,6 +955,23 @@ def print_statistics(df, read_cutoff=None):
 
 
 def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=True):
+    """
+    Group cells by specified keys and sum read counts.
+
+    Parameters
+    ----------
+    df_HQ : pd.DataFrame
+        Input DataFrame with 'read' column.
+    group_keys : list, optional
+        Keys to group by. Default is ["library", "cell_id", "clone_id"].
+    count_UMI : bool, optional
+        Whether to count UMIs. Default is True.
+
+    Returns
+    -------
+    pd.DataFrame
+        Grouped DataFrame with read sums and optional UMI counts.
+    """
     df_out = df_HQ.groupby(group_keys).agg({"read": "sum"})
     if ("umi" not in group_keys) and count_UMI and ("umi" in df_HQ.columns):
         df_out["umi_count"] = df_HQ.groupby(group_keys)["umi"].count().values
@@ -815,9 +981,24 @@ def group_cells(df_HQ, group_keys=["library", "cell_id", "clone_id"], count_UMI=
 
 def seq_partition(n, seq):
     """
-    Partition sequence into every n-bp
+    Partition a DNA sequence into n-bp segments.
 
-    eg. 'ABCDEF', n=2 -> [['AB'],['CD'],['EF']]
+    Parameters
+    ----------
+    n : int
+        Segment length.
+    seq : str
+        DNA sequence to partition.
+
+    Returns
+    -------
+    list
+        List of partitioned sequence segments.
+
+    Examples
+    --------
+    >>> seq_partition(2, 'ABCDEF')
+    ['AB', 'CD', 'EF']
     """
     if n == 1:
         return list(seq)
@@ -832,6 +1013,27 @@ def remove_cells(
     clone_bc_number_cutoff=None,
     clone_size_cutoff=None,
 ):
+    """
+    Filter cells based on various quality criteria.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with 'read' column.
+    read_cutoff : int, optional
+        Minimum read count.
+    umi_cutoff : int, optional
+        Minimum UMI count.
+    clone_bc_number_cutoff : int, optional
+        Maximum number of clonal barcodes per cell.
+    clone_size_cutoff : int, optional
+        Maximum clone size.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame.
+    """
     df_out = df.copy()
     if read_cutoff is not None:
         df_out = df_out[df_out["read"] >= read_cutoff]
@@ -851,11 +1053,20 @@ def remove_cells(
 
 def rename_library_info(df_all, mapping_dictionary):
     """
-    Mapping one library name into another, and also update the cell_id (coupled with library info)
+    Rename library names and update cell IDs accordingly.
 
-    As an example:
-    mapping_dictionary={'LARRY_Lime_33':'Lime_RNA_101','LARRY_Lime_34':'Lime_RNA_102', 'LARRY_Lime_35':'Lime_RNA_103',
-                   'LARRY_Lime_36':'Lime_RNA_104','LARRY_10X_31':'MPP_10X_A3_1', 'LARRY_10X_32':'MPP_10X_A4_1'}
+    Parameters
+    ----------
+    df_all : pd.DataFrame
+        Input DataFrame with 'library' and 'cell_id' columns.
+    mapping_dictionary : dict
+        Dictionary mapping old library names to new names.
+        Example: {'LARRY_Lime_33': 'Lime_RNA_101', 'LARRY_Lime_34': 'Lime_RNA_102', ...}
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with updated library and cell_id columns.
     """
 
     for key in tqdm(mapping_dictionary.keys()):
@@ -863,10 +1074,37 @@ def rename_library_info(df_all, mapping_dictionary):
     df_all.loc[:, "cell_id"] = df_all["library"] + "_" + df_all["cell_bc"]
     return df_all
 
-def compute_CloneBC_read_fraction_per_cell(df_input,cell_bc_key="cell_bc", clone_key="clone_id"):
-    df_out=df_input.filter([cell_bc_key,clone_key,'read']).groupby(cell_bc_key,group_keys=True).apply(
-    lambda df_x: df_x.filter([clone_key,'read']).assign(relative_read_fraction= lambda y:y['read']/y['read'].max()))
+
+def compute_CloneBC_read_fraction_per_cell(
+    df_input, cell_bc_key="cell_bc", clone_key="clone_id"
+):
+    """
+    Compute relative read fraction for each clone barcode within a cell.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with cell_bc, clone_id, and read columns.
+    cell_bc_key : str, optional
+        Column name for cell barcode. Default is "cell_bc".
+    clone_key : str, optional
+        Column name for clone ID. Default is "clone_id".
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with relative read fractions per cell.
+    """
+    df_out = (
+        df_input.filter([cell_bc_key, clone_key, "read"])
+        .groupby(cell_bc_key, group_keys=True)
+        .apply(
+            lambda df_x: df_x.filter([clone_key, "read"]).assign(
+                relative_read_fraction=lambda y: y["read"] / y["read"].max()
+            )
+        )
+    )
 
     plt.subplots()
-    sns.histplot(df_out['relative_read_fraction'],log_scale=True)
+    sns.histplot(df_out["relative_read_fraction"], log_scale=True)
     return df_out

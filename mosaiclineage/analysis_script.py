@@ -28,7 +28,25 @@ def load_all_samples_to_adata(
     SampleList, file_path, df_ref, frequuency_cutoff=10 ** (-4), mode="allele"
 ):
     """
-    mode: allele or mutation
+    Load multiple samples into an AnnData object.
+
+    Parameters
+    ----------
+    SampleList : list
+        List of sample names to load.
+    file_path : str
+        Path to sample directories.
+    df_ref : pd.DataFrame
+        Reference dataframe with allele frequencies.
+    frequuency_cutoff : float, optional
+        Frequency cutoff for filtering. Default is 10**(-4).
+    mode : str, optional
+        Mode for generating AnnData: "allele" or "mutation". Default is "allele".
+
+    Returns
+    -------
+    adata_orig : scanpy.AnnData
+        AnnData object with loaded data.
     """
     tmp_list = []
     for sample in sorted(SampleList):
@@ -58,8 +76,28 @@ def merge_adata_across_times(
     adata_t1, adata_t2, X_shift=12, embed_key="X_umap", data_des="scCamellia"
 ):
     """
-    Adjust X_shift so that you get the best co-embedding of these two datasets.
-    Note that X_shift will be applied permanently to adata_t1
+    Merge two AnnData objects across time points with coordinate adjustment.
+
+    Adjust X_shift to achieve best co-embedding of the two datasets.
+    Note that X_shift will be applied permanently to adata_t1.
+
+    Parameters
+    ----------
+    adata_t1 : scanpy.AnnData
+        First AnnData object (earlier time point).
+    adata_t2 : scanpy.AnnData
+        Second AnnData object (later time point).
+    X_shift : float, optional
+        Shift to apply to adata_t1 embedding. Default is 12.
+    embed_key : str, optional
+        Key for embedding in obsm. Default is "X_umap".
+    data_des : str, optional
+        Description for the merged object. Default is "scCamellia".
+
+    Returns
+    -------
+    adata : scanpy.AnnData
+        Merged AnnData object.
     """
     if adata_t1.raw is not None:
         adata_t1_ = adata_t1.raw.to_adata()
@@ -95,16 +133,32 @@ def generate_allele_info_across_experiments(
     exclude_samples=[],
 ):
     """
-    Merge a given set of experiments at given read_cutoff.
+    Merge allele information across multiple experiments.
 
-    This is an operation spanning multiple different experiments
+    Parameters
+    ----------
+    target_data_list : list
+        List of data paths relative to root_dir. Example:
+        ['20220306_bulk_tissues/TC_DNA', '20220306_bulk_tissues/TC_RNA', '20220430_CC_TC_RC/TC']
+    read_cutoff : int, optional
+        Read cutoff for filtering. Default is 3.
+    root_path : str, optional
+        Root path to data directory. Default is the specified Dropbox path.
+    mouse_label : str, optional
+        Label for mouse ID. Default is "LL".
+    sample_map : dict, optional
+        Custom sample mapping.
+    exclude_samples : list, optional
+        Samples to exclude. Default is empty list.
 
-    target_data_list is a list of data name relative to root_dir
-    An example:
-    target_data_list=[
-       '20220306_bulk_tissues/TC_DNA',
-        '20220306_bulk_tissues/TC_RNA',
-       '20220430_CC_TC_RC/TC']
+    Returns
+    -------
+    df_merge : pd.DataFrame
+        Merged allele data across experiments.
+    df_ref : pd.DataFrame
+        Reference allele data with normalized counts.
+    map_dict : dict
+        Sample mapping dictionary.
     """
     df_list = []
     for sample in target_data_list:

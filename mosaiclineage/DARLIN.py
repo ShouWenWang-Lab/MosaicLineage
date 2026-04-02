@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as ssp
 import yaml
-from tqdm import tqdm
 from Bio import SeqIO
 from scipy.io import loadmat
+from tqdm import tqdm
 
 import mosaiclineage.larry as larry
 import mosaiclineage.util as util
@@ -20,18 +20,22 @@ import mosaiclineage.util as util
 
 
 # define seqeunces and primers for QC. For each 5' sequence, we skip the first 2 bp, and for 3' sequence, we skip the last 2 bp, as they are prone to errors
-CA_5prime = "AGCTGTACAAGTAAGCGGC"  
+CA_5prime = "AGCTGTACAAGTAAGCGGC"
 
-CA_5prime_full = "GAGCTGTACAAGTAAGCGGC" # full primer: GAGCTGTACAAGTAAGCGGC (single-cell & bulk)
+CA_5prime_full = (
+    "GAGCTGTACAAGTAAGCGGC"  # full primer: GAGCTGTACAAGTAAGCGGC (single-cell & bulk)
+)
 CA_3prime = "AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCT"  # full primer: AGAATTCTAACTAGAGCTCGCTGATCAGCCTCGACTGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 CA_CARLIN = "CGCCGGACTGCACGACAGTCGACGATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATACGATACGCGCACGCTATGGAGTCGAGAGCGCGCTCGTCGACTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGAGTCGAGACGCTGACGATATGGAGTCGATACGTAGCACGCAGACGATGGGAGCT"
 
-TA_5prime = "TCGGTACCTCGCGAA"  
-TA_5prime_full = "GCTCGGTACCTCGCGAA" # full primer: GCTCGGTACCTCGCGAA (single-cell & bulk)
+TA_5prime = "TCGGTACCTCGCGAA"
+TA_5prime_full = (
+    "GCTCGGTACCTCGCGAA"  # full primer: GCTCGGTACCTCGCGAA (single-cell & bulk)
+)
 TA_3prime = "GTCTTGTCGGTGCCTTCTAGTT"  # full primer: GTCTTGTCGGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 TA_CARLIN = "TCGCCGGAGTCGAGACGCTGACGATATGGAGTCGACACGACTCGCGCATACGATGGAGTCGCGAGCGCTATGAGCGACTATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGAGCGCGCTCGTCGACTATGGA"
 
-RA_5prime = "GTACAAGTAAAGCGGCC" 
+RA_5prime = "GTACAAGTAAAGCGGCC"
 RA_5prime_full = "ATGTACAAGTAAAGCGGCC"  # full primer:  (single-cell & bulk)
 RA_3prime = "GTCTGCTGTGTGCCTTCTAGTT"  # full primer: GTCTGCTGTGTGCCTTCTAGTTGC (only for bulk DARLIN protocol)
 RA_CARLIN = "GCGCCGGCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACAGTCGCTACGACGATGGAGTCGATACGATACGCGCACGCTATGGAGTCGACTGCACGACAGTCGACGATGGAGTCGATACGTAGCACGCAGACGATGGGAGCGAGTCGAGACGCTGACGATATGGAGTCGATAGTATGCGTACACGCGATGGAGTCGCGACTGTACGCACACGCGATGGAGTCGAGAGCGCGCTCGTCGACTATGGA"
@@ -45,10 +49,24 @@ RA_CARLIN = "GCGCCGGCGAGCGCTATGAGCGACTATGGAGTCGACACGACTCGCGCATACGATGGAGTCGACTACA
 
 
 def consensus_sequence(df):
+    """
+    Compute a consensus sequence from a collection of sequences.
+
+    Parameters
+    ----------
+    df : array-like
+        Collection of sequences (strings).
+
+    Returns
+    -------
+    str
+        Consensus sequence computed by taking the median at each position.
+    """
     X = np.array([np.array(bytearray(x, encoding="utf8")) for x in df])
     return bytes(np.median(X, axis=0).astype("uint8")).decode("utf8")
 
-def check_editing(df,template):
+
+def check_editing(df, template):
     if template.startswith("cCARLIN"):
         CARLIN_seq = CA_CARLIN  # for insufficient length, the 3' end is not splitted.
     elif template.startswith("Tigre"):
@@ -60,18 +78,37 @@ def check_editing(df,template):
     #     if length> len(CARLIN_seq):
     #         length=len(CARLIN_seq)
     # print(f'Use expected full length for unedited BC: {length}')
-    df['edited']=df['clone_id'].apply(lambda x: not (CARLIN_seq.startswith(x)))
-    editing_efficiency=df.groupby('cell_id').agg({'edited':'mean'}).mean()['edited']
-    print(f'Editing efficiency: {editing_efficiency:.3f}')
+    df["edited"] = df["clone_id"].apply(lambda x: not (CARLIN_seq.startswith(x)))
+    editing_efficiency = df.groupby("cell_id").agg({"edited": "mean"}).mean()["edited"]
+    print(f"Editing efficiency: {editing_efficiency:.3f}")
     return df
+
 
 def CARLIN_analysis(
     df_input, cell_bc_key="cell_bc", clone_key="clone_id", read_ratio_threshold=0.6
 ):
     """
-    This function is similar to the CARLIN pipeline, that for each tag, we find the dominant CARLIN sequence as the right candidate.
-    At the moment, I believe that second part (obtain consensus sequence is not used, as there is only one sequence left after the
-    dominant sequence selection.
+    Perform CARLIN-style analysis to identify dominant CARLIN sequences.
+
+    For each tag, find the dominant CARLIN sequence as the candidate.
+    The consensus sequence step is not used since there is typically only one
+    sequence left after dominant sequence selection.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input dataframe containing clone and cell barcode information.
+    cell_bc_key : str, optional
+        Column name for cell barcodes. Default is "cell_bc".
+    clone_key : str, optional
+        Column name for clone IDs. Default is "clone_id".
+    read_ratio_threshold : float, optional
+        Minimum ratio of reads for the dominant sequence. Default is 0.6.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with consensus CARLIN sequences and read information per cell barcode.
     """
 
     # df_dominant_fraction=calculate_read_fraction_for_dominant_sequences(df_input,cell_bc_key=cell_bc_key,clone_key=clone_key)
@@ -88,14 +125,25 @@ def CARLIN_analysis(
     return df_final
 
 
-def CARLIN_raw_reads(data_path, sample, protocol="scCamellia",fastq_format=0):
+def CARLIN_raw_reads(data_path, sample, protocol="scCamellia", fastq_format=0):
     """
-    Load raw fastq files. This function will depend on what protocol is used.
+    Load raw fastq files for CARLIN sequencing.
 
-    if fastq_format==0:
-        file_name=f"{data_path}/{sample}_{Rx}.fastq.gz"
-    else:
-        file_name=f"{data_path}/{sample}_L001_{Rx}_001.fastq.gz"
+    Parameters
+    ----------
+    data_path : str
+        Path to the data directory.
+    sample : str
+        Sample name.
+    protocol : str, optional
+        Protocol type. Supported: "scCamellia", "sc10xV3", "Bulk", "BulkUMI".
+        Default is "scCamellia".
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing sequence information with columns for cell barcodes,
+        UMIs, clone IDs, and quality scores.
     """
     # supported_protocol = ["scCamellia", "sc10xV3"]
     # if not (protocol in supported_protocol):
@@ -119,12 +167,12 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia",fastq_format=0):
         seq_quality = []
 
         def get_file_name(Rx):
-            if fastq_format==0:
-                file_name=f"{data_path}/{sample}_{Rx}.fastq.gz"
+            if fastq_format == 0:
+                file_name = f"{data_path}/{sample}_{Rx}.fastq.gz"
             else:
-                file_name=f"{data_path}/{sample}_L001_{Rx}_001.fastq.gz"
+                file_name = f"{data_path}/{sample}_L001_{Rx}_001.fastq.gz"
             return file_name
-        
+
         with gzip.open(get_file_name(seq_read), "rt") as handle:
             for record in tqdm(SeqIO.parse(handle, "fastq")):
                 seq_list.append(str(record.seq))
@@ -156,7 +204,8 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia",fastq_format=0):
         )
         df_seq["library"] = sample
         cell_id = [
-            f"{x}_{y}" for x, y in zip(df_seq["library"].to_list(), df_seq["cell_bc"].to_list())
+            f"{x}_{y}"
+            for x, y in zip(df_seq["library"].to_list(), df_seq["cell_bc"].to_list())
         ]
         df_seq["cell_id"] = cell_id
         df_seq["umi"] = df_seq["Tag"].apply(lambda x: x[bc_len : (bc_len + umi_len)])
@@ -167,7 +216,8 @@ def CARLIN_raw_reads(data_path, sample, protocol="scCamellia",fastq_format=0):
             lambda x: np.min(x[bc_len : (bc_len + umi_len)])
         )
         umi_id = [
-            f"{x}_{y}" for x, y in zip(df_seq["cell_bc"].to_list(), df_seq["umi"].to_list())
+            f"{x}_{y}"
+            for x, y in zip(df_seq["cell_bc"].to_list(), df_seq["umi"].to_list())
         ]
         df_seq["umi_id"] = umi_id
         df_seq["clone_id"] = df_seq["Seq"]
@@ -229,25 +279,27 @@ def CARLIN_preprocessing(
     seq_3prime_upper_N=None,
 ):
     """
-    Filter the raw reads. This pipeline should be independent of whether this is bulk or single-cell CARLIN
+    Filter raw CARLIN reads based on quality criteria.
+
+    This pipeline is independent of whether the data is bulk or single-cell CARLIN.
 
     Parameters
     ----------
-    df_input: pd.DataFrame
-        input data, from CARLIN_raw_reads
-    template: str
-        {'cCARLIN','Tigre','Rosa'}
-    ref_cell_barcodes:
-        Reference cell barcode list, for filtering
-    seq_5prime_upper_N:
-        Control the number of 5prime bps for QC. Default: use all bps.
-    seq_3prime_upper_N:
-        Control the number of 5prime bps for QC. Default: use all bps.
+    df_input : pd.DataFrame
+        Input data from CARLIN_raw_reads.
+    template : str, optional
+        Template type: {'cCARLIN', 'Tigre', 'Rosa'}. Default is "cCARLIN".
+    ref_cell_barcodes : list, optional
+        Reference cell barcode list for filtering. Default is None.
+    seq_5prime_upper_N : int, optional
+        Number of 5' end bps to use for QC. Default is None (use all).
+    seq_3prime_upper_N : int, optional
+        Number of 3' end bps to use for QC. Default is None (use all).
 
     Returns
     -------
-    df_output:
-        A dataframe of sequences that pass QC
+    pd.DataFrame
+        DataFrame of sequences that pass QC with filtered clone_id, cell_bc, umi, etc.
     """
 
     # seq_5prime:
@@ -260,105 +312,100 @@ def CARLIN_preprocessing(
     df_output = df_input.copy()
     tot_fastq_N = len(df_output)
     print("Total fastq:", tot_fastq_N)
-    seq_length = int(df_output['clone_id'].iloc[:100].apply(lambda x: len(x)).mean())
-    if seq_length<300:
-        use_short_3prime=True
-        print('Use short primer')
+    seq_length = int(df_output["clone_id"].iloc[:100].apply(lambda x: len(x)).mean())
+    if seq_length < 300:
+        use_short_3prime = True
+        print("Use short primer")
     else:
-        use_short_3prime=False
-    
+        use_short_3prime = False
+
     if template.startswith("cCARLIN"):
         seq_5prime = CA_5prime
         seq_5prime_full = CA_5prime_full
         CARLIN_seq = CA_CARLIN
         if use_short_3prime:
-            seq_3prime='TGGGAGCTAGAA' #TT
-            appendix='TGGGAGCT'
+            seq_3prime = "TGGGAGCTAGAA"  # TT
+            appendix = "TGGGAGCT"
         else:
             seq_3prime = CA_3prime
-            appendix=''
+            appendix = ""
     elif template.startswith("Tigre"):
         seq_5prime = TA_5prime
         seq_5prime_full = TA_5prime_full
         CARLIN_seq = TA_CARLIN
         if use_short_3prime:
-            seq_3prime='TGGAGTCTTG' #TC
-            appendix='TGGA'
+            seq_3prime = "TGGAGTCTTG"  # TC
+            appendix = "TGGA"
         else:
             seq_3prime = TA_3prime
-            appendix=''
+            appendix = ""
     elif template.startswith("Rosa"):
         seq_5prime = RA_5prime
         seq_5prime_full = RA_5prime_full
         CARLIN_seq = RA_CARLIN
         if use_short_3prime:
-            seq_3prime='TGGAGTCTGC' # TG
-            appendix='TGGA'
+            seq_3prime = "TGGAGTCTGC"  # TG
+            appendix = "TGGA"
         else:
             seq_3prime = RA_3prime
-            appendix=''
+            appendix = ""
     else:
         raise ValueError("template must start with {'cCARLIN','Tigre','Rosa'}")
 
-
-    seq_full = seq_5prime_full + CARLIN_seq + seq_3prime[len(appendix):]
-    print('seq_full:',seq_full)
+    seq_full = seq_5prime_full + CARLIN_seq + seq_3prime[len(appendix) :]
+    print("seq_full:", seq_full)
 
     if seq_5prime_upper_N is not None:
         seq_5prime = seq_5prime[-seq_5prime_upper_N:]
     if seq_3prime_upper_N is None:
-        seq_3prime_upper_N=len(seq_3prime)
+        seq_3prime_upper_N = len(seq_3prime)
 
     seq_3prime_0 = seq_3prime[:seq_3prime_upper_N]
-    df_output["Valid_5prime"] = df_output["clone_id"].apply(
-        lambda x: (seq_5prime in x) 
-    )
+    df_output["Valid_5prime"] = df_output["clone_id"].apply(lambda x: (seq_5prime in x))
     df_output["Valid_3prime_0"] = df_output["clone_id"].apply(
-        lambda x: (seq_3prime_0 in x) 
+        lambda x: (seq_3prime_0 in x)
     )
-    if seq_length<len(seq_full): # insufficient sequencing length
-        print(f'Fastq length insufficient ({seq_length} bp)')
-        #print('Expected full seq',seq_full)
+    if seq_length < len(seq_full):  # insufficient sequencing length
+        print(f"Fastq length insufficient ({seq_length} bp)")
+        # print('Expected full seq',seq_full)
         df_output["Valid_3prime_1"] = df_output["clone_id"].apply(
-            lambda x:  x[-seq_3prime_upper_N:] in seq_full
+            lambda x: x[-seq_3prime_upper_N:] in seq_full
         )
-        df_output["Valid_3prime"] = df_output["Valid_3prime_0"] | df_output["Valid_3prime_1"]
+        df_output["Valid_3prime"] = (
+            df_output["Valid_3prime_0"] | df_output["Valid_3prime_1"]
+        )
     else:
         df_output["Valid_3prime"] = df_output["Valid_3prime_0"]
-    
-    df_output["Valid"]=df_output["Valid_5prime"] & df_output["Valid_3prime"] 
-    print(
-        f"Fastq frac. with vaid 5 prime: {np.mean(df_output['Valid_5prime']):.3f}"
-    )
-    print(
-        f"Fastq frac. with vaid 3 prime: {np.mean(df_output['Valid_3prime']):.3f}"
-    )
+
+    df_output["Valid"] = df_output["Valid_5prime"] & df_output["Valid_3prime"]
+    print(f"Fastq frac. with vaid 5 prime: {np.mean(df_output['Valid_5prime']):.3f}")
+    print(f"Fastq frac. with vaid 3 prime: {np.mean(df_output['Valid_3prime']):.3f}")
 
     df_output = df_output.query("Valid==True")
     if ref_cell_barcodes is not None:
         df_output = df_output[df_output["cell_bc"].isin(ref_cell_barcodes)]
         valid_BC_N = len(df_output)
         print(f"Fastq with valid barcodes: {valid_BC_N} ({valid_BC_N/tot_fastq_N:.3f})")
-    
-    df_output_0=df_output[df_output["Valid_3prime_0"]]
+
+    df_output_0 = df_output[df_output["Valid_3prime_0"]]
     df_output_0["clone_id"] = df_output_0["clone_id"].apply(
-        lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0]+appendix
+        lambda x: x.split(seq_5prime)[1].split(seq_3prime_0)[0] + appendix
     )
-    df_output_0["3prime_detected"]=True
-    if seq_length<len(seq_full): # insufficient sequencing length
-        df_output_1=df_output[df_output["Valid_3prime_1"] & (~df_output["Valid_3prime_0"])]
+    df_output_0["3prime_detected"] = True
+    if seq_length < len(seq_full):  # insufficient sequencing length
+        df_output_1 = df_output[
+            df_output["Valid_3prime_1"] & (~df_output["Valid_3prime_0"])
+        ]
         df_output_1["clone_id"] = df_output_1["clone_id"].apply(
             lambda x: x.split(seq_5prime)[1]
         )
-        df_output_1["3prime_detected"]= False
-        df_output=pd.concat([df_output_0,df_output_1])
-    else: # sufficient sequencing length
-        df_output=df_output_0
-    print(
-        f"Fastq frac. with vaid 3 and 5 prime: {len(df_output)/tot_fastq_N:.3f}"
-    )
-    #print(pd.isna(df_output['clone_id']).sum())
-    df_output=check_editing(df_output,template)
+        df_output_1["3prime_detected"] = False
+        df_output = pd.concat([df_output_0, df_output_1])
+    else:  # sufficient sequencing length
+        df_output = df_output_0
+    print(f"Fastq frac. with vaid 3 and 5 prime: {len(df_output)/tot_fastq_N:.3f}")
+    # print(pd.isna(df_output['clone_id']).sum())
+    df_output = check_editing(df_output, template)
 
     df_output["unique_id"] = (
         df_output["cell_id"] + "_" + df_output["umi_id"] + "_" + df_output["clone_id"]
@@ -394,6 +441,19 @@ def CARLIN_preprocessing(
 
 
 def get_SampleList(root_path):
+    """
+    Load sample list from config.yaml file.
+
+    Parameters
+    ----------
+    root_path : str
+        Path to the root directory containing config.yaml.
+
+    Returns
+    -------
+    list
+        List of sample names from the config file.
+    """
     with open(f"{root_path}/config.yaml", "r") as stream:
         file = yaml.safe_load(stream)
         SampleList = file["SampleList"]
@@ -402,9 +462,17 @@ def get_SampleList(root_path):
 
 def load_allele_info(data_path):
     """
-    Convert allele and frequency information to a pd.DataFrame.
+    Convert allele and frequency information from .mat file to a DataFrame.
 
-    data_path: point to specific sample folder, e.g. path/to/results_read_cutoff_3/{sample}
+    Parameters
+    ----------
+    data_path : str
+        Path to specific sample folder, e.g., path/to/results_read_cutoff_3/{sample}.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'allele' and 'UMI_count' columns.
     """
     pooled_data = loadmat(os.path.join(data_path, "allele_annotation.mat"))
     allele_freqs = pooled_data["allele_freqs"].flatten()
@@ -414,9 +482,20 @@ def load_allele_info(data_path):
 
 def load_allele_frequency_statistics(data_path: str, SampleList: list):
     """
-    Return an allele-grouped frequency count table
+    Load allele frequency statistics across multiple samples.
 
-    data_path: should be at the level of samples, e.g., path/to/results_read_cutoff_3
+    Parameters
+    ----------
+    data_path : str
+        Path at the level of samples, e.g., path/to/results_read_cutoff_3.
+    SampleList : list
+        List of sample names to load.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with allele-grouped frequency counts containing 'allele',
+        'UMI_count', and 'sample_count' columns.
     """
 
     df_list = []
@@ -438,12 +517,21 @@ def extract_CARLIN_info(
     sample_name_format="LL",
 ):
     """
-    Extract CARLIN information, like alleles, colonies, UMI count info
+    Extract CARLIN information including alleles, colonies, and UMI counts.
 
-    data_path:
-        The root dir to all the samples, e.g. path/to/results_read_cutoff_3
-    SampleList:
-        The list of desired samples to load
+    Parameters
+    ----------
+    data_path : str
+        Root directory containing all sample folders, e.g., path/to/results_read_cutoff_3.
+    SampleList : list
+        List of desired samples to load.
+    sample_name_format : str, optional
+        Format for sample name parsing. Default is "LL".
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing CARLIN allele information with clone sizes.
     """
 
     tmp_list = []
@@ -501,16 +589,30 @@ def extract_CARLIN_info(
 
 def CARLIN_output_to_cell_by_barcode_long_table(df_input):
     """
-    Convert output from extract_CARLIN_info (a wide table)
-    to a two column (cell, and clone_id) long table.
+    Convert CARLIN output from wide to long table format.
 
-    Warn: this is suitable only within a library.
+    Converts output from extract_CARLIN_info (a wide table) to a two-column
+    (cell_bc and clone_id) long table.
 
-    A alternative method:
-    ```python
-    df_input['CB']=df_input['CB'].str.split(',')
-    df_output=df_input.explode('CB').reset_index(drop=True).rename(columns={'CB':'cell_bc','CARLIN':'clone_id'})
-    ```
+    Note: This is suitable only within a single library.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Wide-format DataFrame with 'CB' and 'CARLIN' columns.
+
+    Returns
+    -------
+    pd.DataFrame
+        Long-format DataFrame with 'cell_bc' and 'clone_id' columns.
+
+    Examples
+    --------
+    An alternative method:
+    >>> df_input['CB'] = df_input['CB'].str.split(',')
+    >>> df_output = df_input.explode('CB').reset_index(drop=True).rename(
+    ...     columns={'CB': 'cell_bc', 'CARLIN': 'clone_id'}
+    ... )
     """
 
     CB_flat = []
@@ -535,13 +637,29 @@ def merge_three_locus(
     sample_type_RA="TA",
 ):
     """
-    Merge the 3 locus (CC,TC,RC) according to the sample info and
-    convert to a wide table
+    Merge CARLIN data from three loci (CA, TA, RA) into a wide table.
 
-    data_path_CA:
-        Path to CC locus root dir that contains all sample sub-folder,
-        e.g. path/to/results_read_cutoff_3
-    sample_type_CA
+    Parameters
+    ----------
+    data_path_CA : str
+        Path to CA locus root directory containing sample sub-folders.
+    data_path_RA : str
+        Path to RA locus root directory.
+    data_path_TA : str, optional
+        Path to TA locus root directory. If None, only CA and RA are merged.
+    sample_type_CA : str, optional
+        Label for CA locus type. Default is "CA".
+    sample_type_TA : str, optional
+        Label for TA locus type. Default is "RA".
+    sample_type_RA : str, optional
+        Label for RA locus type. Default is "TA".
+
+    Returns
+    -------
+    df_all : pd.DataFrame
+        Merged DataFrame from all loci.
+    df_sample_association : pd.DataFrame
+        DataFrame showing sample ID associations across loci.
     """
 
     df_CA = pd.read_csv(
@@ -603,7 +721,19 @@ def merge_three_locus(
 
 def extract_lineage(x, sample_name_format="LL"):
     """
-    We expect the structure like 'LL731-LF-B'
+    Extract lineage information from sample name.
+
+    Parameters
+    ----------
+    x : str
+        Sample name with structure like 'LL731-LF-B'.
+    sample_name_format : str, optional
+        Format of sample name. Default is "LL".
+
+    Returns
+    -------
+    str
+        Extracted lineage string.
     """
     if sample_name_format == "LL":
         x = "-".join(x.split("-")[:3])  # keep at most 3 entries
@@ -616,6 +746,21 @@ def extract_lineage(x, sample_name_format="LL"):
 
 
 def rename_lib(x, sample_name_format="LL"):
+    """
+    Rename library/sample name by removing locus suffixes.
+
+    Parameters
+    ----------
+    x : str
+        Library name to rename.
+    sample_name_format : str, optional
+        Format of sample name. Default is "LL".
+
+    Returns
+    -------
+    str
+        Renamed library name with locus suffix removed.
+    """
     if sample_name_format == "LL":
         # this is for CARLIN data
         if "_S" in x:
@@ -647,8 +792,22 @@ def rename_lib(x, sample_name_format="LL"):
 
 def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"):
     """
-    For a nesting list like ['a',['b','c'],['d','e','f']],
-    it will return the first in each element, i.e, ['a','b','d']
+    Extract the first sample from each element of a nested list.
+
+    For a nested list like ['a', ['b', 'c'], ['d', 'e', 'f']],
+    returns ['a', 'b', 'd'] (the first element from each sublist).
+
+    Parameters
+    ----------
+    SampleList : list
+        Nested list of sample names.
+    sample_name_format : str, optional
+        Format for sample name processing. Default is "LL".
+
+    Returns
+    -------
+    list
+        List with first sample from each element.
     """
 
     def custom_rename_lib(x):
@@ -666,7 +825,21 @@ def extract_first_sample_from_a_nesting_list(SampleList, sample_name_format="LL"
 
 
 def extract_plate_ID(x, sample_name_format="LL"):
-    # this is for single-cell Limecat protocl
+    """
+    Extract plate ID from sample name.
+
+    Parameters
+    ----------
+    x : str
+        Sample name.
+    sample_name_format : str, optional
+        Format for parsing. Default is "LL".
+
+    Returns
+    -------
+    str
+        Extracted plate ID.
+    """
     if sample_name_format == "LL":
         return x[:-3]
     else:
@@ -675,7 +848,21 @@ def extract_plate_ID(x, sample_name_format="LL"):
 
 def add_metadata(df_sc_data, plate_map=None, sample_name_format="LL"):
     """
-    Annotate single-cell CARLIN data
+    Annotate single-cell CARLIN data with metadata.
+
+    Parameters
+    ----------
+    df_sc_data : pd.DataFrame
+        Single-cell CARLIN DataFrame.
+    plate_map : dict, optional
+        Mapping from plate IDs to new names.
+    sample_name_format : str, optional
+        Format for sample name. Default is "LL".
+
+    Returns
+    -------
+    pd.DataFrame
+        Annotated DataFrame with additional columns for library, sample, mouse, plate_ID, RNA_id, etc.
     """
 
     def custom_rename_lib(x):
@@ -707,6 +894,21 @@ def add_metadata(df_sc_data, plate_map=None, sample_name_format="LL"):
 
 
 def generate_sc_CARLIN_from_CARLIN_output(df_all, sample_name_format="LL"):
+    """
+    Generate single-cell CARLIN data from CARLIN output.
+
+    Parameters
+    ----------
+    df_all : pd.DataFrame
+        DataFrame with allele, sample, CB columns.
+    sample_name_format : str, optional
+        Format for sample name. Default is "LL".
+
+    Returns
+    -------
+    pd.DataFrame
+        Single-cell CARLIN DataFrame with expanded cell barcodes and metadata.
+    """
     if "locus" not in df_all.columns:
         df_all["locus"] = "locus"
 
@@ -741,37 +943,46 @@ def assign_clone_id_by_integrating_locus(
     clone_key="allele",
 ):
     """
-    Integrate alleles from different locus to assign a common clone ID.
-    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CA_TA_RA alleles with a high frequency
+    Integrate alleles from different loci to assign a common clone ID.
+
+    After running this, you may still need to remove potentially ambiguous clones,
+    typically those with large allele_num (number of alleles from CC, TC, or RC
+    within the same assigned clone_id), and remove joint_CA_TA_RA alleles with
+    high frequency.
 
     Parameters
     ----------
-        df_sc_CARLIN_raw:
-            A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
-        prob_cutoff:
-            The probability cutoff to use an allele to establish strong connection between two CA-TA-RA clone IDs
-        joint_allele_N_cutoff:
-            An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
-            we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
+    df_sc_CARLIN_raw : pd.DataFrame
+        Long-format DataFrame with 'RNA_id', 'locus', 'normalized_count', 'allele'.
+    prob_cutoff : float, optional
+        Probability cutoff to establish strong connection between two CA-TA-RA clone IDs.
+    sample_count_cutoff : int, optional
+        Sample count cutoff for allele filtering. Default is 2.
+    joint_allele_N_cutoff : int, optional
+        Maximum number of co-detected alleles from other loci for an allele to be used
+        as a strong connection. Default is 6.
+    locus_list : list, optional
+        List of loci to integrate. Default is ["CA", "TA", "RA"].
+    clone_key : str, optional
+        Column name for clone IDs. Default is "allele".
 
     Returns
     -------
-        df_assigned_clones:
-            A dataframe, each entry gives the assigned clone_id and its relation to the detected CA-TA-RA joint allele
-        df_sc_CARLIN:
-            Update the input df_sc_CARLIN to add columns: 'joint_clone_id', 'joint_prob', 'joint_allele_num'
-        df_allele:
-            CA-TA-RA joint allele table
+    df_assigned_clones : pd.DataFrame
+        DataFrame with assigned clone_id and relations to detected CA-TA-RA joint alleles.
+    df_sc_CARLIN : pd.DataFrame
+        Updated input DataFrame with columns: 'joint_clone_id', 'joint_prob', 'joint_allele_num'.
+    df_allele : pd.DataFrame
+        CA-TA-RA joint allele table.
 
-
-    ## example: this code helps to connect df_allele with df_assigned_clones for debugging
-    ```python
-    df_display=df_assigned_clones[df_assigned_clones['allele_num']==6]
-    for j in range(10):
-        print(f'clone-{j}')
-        BC_ids=df_display.iloc[j]['BC_id']
-        display(df_allele.iloc[BC_ids])
-    ```
+    Examples
+    --------
+    Debugging example:
+    >>> df_display = df_assigned_clones[df_assigned_clones['allele_num'] == 6]
+    >>> for j in range(10):
+    ...     print(f'clone-{j}')
+    ...     BC_ids = df_display.iloc[j]['BC_id']
+    ...     display(df_allele.iloc[BC_ids])
     """
 
     import scanpy as sc
@@ -947,45 +1158,46 @@ def assign_clone_id_by_integrating_locus(
         df_allele.filter(locus_BC_names + ["joint_clone_id_tmp"]),
     )
 
-def assign_clone_id_with_Jaccard_similarity(cell_by_mutation_matrix, cell_label,similarity_threshold=0.6):
+
+def assign_clone_id_with_Jaccard_similarity(
+    cell_by_mutation_matrix, cell_label, similarity_threshold=0.6
+):
     """
-        df_wide = df_final_all.pivot(index='cell_id', columns='clone_id', values='read')
-        ## generate cell-cell similarity matrix in terms of shared barcode number (then binarize)
-        Cell_2_Clone_Matrix=np.nan_to_num(df_wide.to_numpy())
-        Cell_2_Clone_Matrix=(Cell_2_Clone_Matrix>0).astype(int)
-        
-        
-        
-        cell_by_mutation_matrix: a normal numpy matrix
+    df_wide = df_final_all.pivot(index='cell_id', columns='clone_id', values='read')
+    ## generate cell-cell similarity matrix in terms of shared barcode number (then binarize)
+    Cell_2_Clone_Matrix=np.nan_to_num(df_wide.to_numpy())
+    Cell_2_Clone_Matrix=(Cell_2_Clone_Matrix>0).astype(int)
+
+
+
+    cell_by_mutation_matrix: a normal numpy matrix
     """
     import scipy.sparse as ssp
     from scipy.sparse.csgraph import connected_components
-    
-    Cell_2_Clone_sparse=ssp.csr_matrix(cell_by_mutation_matrix)
-    X_shared_BC_N=Cell_2_Clone_sparse.dot(Cell_2_Clone_sparse.T)
-    X_shared_BC_N=X_shared_BC_N.A
+
+    Cell_2_Clone_sparse = ssp.csr_matrix(cell_by_mutation_matrix)
+    X_shared_BC_N = Cell_2_Clone_sparse.dot(Cell_2_Clone_sparse.T)
+    X_shared_BC_N = X_shared_BC_N.A
 
     # compute the barcode number of a cell
-    cell_BC_N_vector=cell_by_mutation_matrix.sum(1)
+    cell_BC_N_vector = cell_by_mutation_matrix.sum(1)
 
     # compute the cell-cell total barcode number matrix: BC_N_from_cell_1 + BC_N_from_cell_2
     # Note that this is NOT the number of unique barcodes
-    one_vector=np.ones(len(cell_BC_N_vector))
-    column_matrix=cell_BC_N_vector[:,np.newaxis].T*one_vector[:,np.newaxis]
-    row_matrix=column_matrix.T
-    Total_BC_N_matrix=column_matrix+row_matrix
+    one_vector = np.ones(len(cell_BC_N_vector))
+    column_matrix = cell_BC_N_vector[:, np.newaxis].T * one_vector[:, np.newaxis]
+    row_matrix = column_matrix.T
+    Total_BC_N_matrix = column_matrix + row_matrix
 
     # Now compute the number of unique barcodes by substrating the number of shared barcodes
-    Total_unique_BC_N_matrix=Total_BC_N_matrix-X_shared_BC_N
+    Total_unique_BC_N_matrix = Total_BC_N_matrix - X_shared_BC_N
 
     # Now, compute the Jaccard similarity between two cells
-    X_similarity=X_shared_BC_N/Total_unique_BC_N_matrix
-    
-    
+    X_similarity = X_shared_BC_N / Total_unique_BC_N_matrix
+
     # thresholding the matrix
-    X_similarity_binarized=(X_similarity>similarity_threshold).astype(int)
-    
-    
+    X_similarity_binarized = (X_similarity > similarity_threshold).astype(int)
+
     ## partition the graph from the discretized similarity matrix into different components
     n_components, labels = connected_components(X_similarity_binarized, directed=False)
 
@@ -998,17 +1210,18 @@ def assign_clone_id_with_Jaccard_similarity(cell_by_mutation_matrix, cell_label,
             clone_size=("BC_id", lambda x: len(set(x))),
         )
     )
-    
-    orig_cell_BC_array=np.array(cell_label)
+
+    orig_cell_BC_array = np.array(cell_label)
     df_assigned_clones["orig_cell_id"] = df_assigned_clones["cell_id_list"].apply(
-        lambda x: list(
-            orig_cell_BC_array[x]
-        )
+        lambda x: list(orig_cell_BC_array[x])
     )
-    df_clone_final=df_assigned_clones.reset_index().filter(['clone_id','orig_cell_id']).explode('orig_cell_id')
-    df_clone_final['clone_id']='clone_'+df_clone_final['clone_id'].astype(str)
-    
-    
+    df_clone_final = (
+        df_assigned_clones.reset_index()
+        .filter(["clone_id", "orig_cell_id"])
+        .explode("orig_cell_id")
+    )
+    df_clone_final["clone_id"] = "clone_" + df_clone_final["clone_id"].astype(str)
+
     # if plot:
     #     import seaborn as sns
     #     from matplotlib import pyplot as plt
@@ -1019,6 +1232,7 @@ def assign_clone_id_with_Jaccard_similarity(cell_by_mutation_matrix, cell_label,
 
     return df_clone_final, df_assigned_clones
 
+
 def assign_clone_id_by_integrating_locus_v1(
     df_sc_CARLIN_raw,
     prob_cutoff=0.1,
@@ -1028,42 +1242,42 @@ def assign_clone_id_by_integrating_locus_v1(
     consider_mutation=True,
 ):
     """
-    This version is based on additive coupling strength and leiden clustering
+    Integrate alleles from different loci to assign a common clone ID using Leiden clustering.
 
-
-    Integrate alleles from different locus to assign a common clone ID.
-    After running this, you will still need to remove potentially ambiguous clones, typically with large allele_num (number of alleles (either from CC,TC, or RC) within the same assigned clone_id), and remove joint_CA_TA_RA alleles with a high frequency
+    This version is based on additive coupling strength and Leiden clustering.
+    After running this, you may still need to remove potentially ambiguous clones.
 
     Parameters
     ----------
-        df_sc_CARLIN:
-            A long-format dataframe storing: 'RNA_id', 'locus', 'normalized_count','allele'
-        prob_cutoff:
-            The probability cutoff (<) to use an allele to establish strong connection between two CA-TA-RA clone IDs
-        sample_count_cutoff:
-            Sample count cutoff (<) for an allele to be used to establish strong connection between two CA-TA-RA clone IDs
-        joint_allele_N_cutoff:
-            An allele needs to have less than this number co-detected alleles from other locus to be used as a strong connection in the S matrix
-            we found that this filterning is usually only necessary for TC, as for CC and RC, the alleles with high joint_allele_N also has high prob
+    df_sc_CARLIN_raw : pd.DataFrame
+        Long-format DataFrame with 'RNA_id', 'locus', 'normalized_count', 'allele'.
+    prob_cutoff : float, optional
+        Probability cutoff (<) for establishing strong connections.
+    sample_count_cutoff : int, optional
+        Sample count cutoff (<) for allele filtering.
+    joint_allele_N_cutoff : int, optional
+        Maximum number of co-detected alleles from other loci. Default is 6.
+    locus_list : list, optional
+        List of loci to integrate. Default is ["CA", "TA", "RA"].
+    consider_mutation : bool, optional
+        Whether to consider mutations in similarity calculation. Default is True.
 
     Returns
     -------
-        df_assigned_clones:
-            A dataframe, each entry gives the assigned clone_id and its relation to the detected CA-TA-RA joint allele
-        df_sc_CARLIN:
-            Update the input df_sc_CARLIN to add columns: 'joint_clone_id', 'joint_prob', 'joint_allele_num'
-        df_allele:
-            CA-TA-RA joint allele table
+    df_assigned_clones : pd.DataFrame
+        DataFrame with assigned clone_id and relations to detected joint alleles.
+    df_sc_CARLIN : pd.DataFrame
+        Updated DataFrame with 'joint_clone_id', 'joint_prob', 'joint_allele_num', 'BC_consistency'.
+    df_allele : pd.DataFrame
+        CA-TA-RA joint allele table.
 
-
-    ## example: this code helps to connect df_allele with df_assigned_clones for debugging
-    ```python
-    df_display=df_assigned_clones[df_assigned_clones['allele_num']==6]
-    for j in range(10):
-        print(f'clone-{j}')
-        BC_ids=df_display.iloc[j]['BC_id']
-        display(df_allele.iloc[BC_ids])
-    ```
+    Examples
+    --------
+    >>> df_display = df_assigned_clones[df_assigned_clones['allele_num'] == 6]
+    >>> for j in range(10):
+    ...     print(f'clone-{j}')
+    ...     BC_ids = df_display.iloc[j]['BC_id']
+    ...     display(df_allele.iloc[BC_ids])
     """
 
     import scanpy as sc
@@ -1328,11 +1542,23 @@ def assign_clone_id_by_integrating_locus_v1(
 def filter_high_quality_joint_clones(
     df_sc_CARLIN, joint_prob_cutoff=0.1, joint_allele_num_cutoff=6
 ):
-    #  return df_sc_CARLIN.assign(
-    # HQ=lambda x: (x["sample_count"] <= BC_max_sample_count)
-    # & (x["normalized_count"] <= BC_max_freq)
-    # ).query("HQ==True")
+    """
+    Filter single-cell CARLIN data for high-quality joint clones.
 
+    Parameters
+    ----------
+    df_sc_CARLIN : pd.DataFrame
+        DataFrame with 'joint_prob' and 'joint_allele_num' columns.
+    joint_prob_cutoff : float, optional
+        Maximum joint probability for filtering. Default is 0.1.
+    joint_allele_num_cutoff : int, optional
+        Maximum number of joint alleles. Default is 6.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame with high-quality joint clones.
+    """
     return df_sc_CARLIN[
         (df_sc_CARLIN["joint_prob"] < joint_prob_cutoff)
         & (df_sc_CARLIN["joint_allele_num"] < joint_allele_num_cutoff)
@@ -1342,7 +1568,23 @@ def filter_high_quality_joint_clones(
 def filter_high_quality_single_alleles(
     df_data, normalized_count_cutoff=0.1, sample_count_cutoff=1
 ):
+    """
+    Filter data for high-quality single alleles.
 
+    Parameters
+    ----------
+    df_data : pd.DataFrame
+        DataFrame with 'normalized_count' and 'sample_count' columns.
+    normalized_count_cutoff : float, optional
+        Maximum normalized count for filtering. Default is 0.1.
+    sample_count_cutoff : int, optional
+        Maximum sample count for filtering. Default is 1.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame with high-quality single alleles.
+    """
     return df_data[
         (df_data["normalized_count"] < normalized_count_cutoff)
         & (df_data["sample_count"] <= sample_count_cutoff)

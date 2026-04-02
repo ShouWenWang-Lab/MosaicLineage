@@ -24,7 +24,27 @@ rng = np.random.default_rng()
 def mutations_per_allele(
     df_input, count_key="UMI_count", save=False, save_path=".", plot=False
 ):
+    """
+    Count the number of mutations per allele.
 
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'allele' column.
+    count_key : str, optional
+        Column name for UMI count. Default is "UMI_count".
+    save : bool, optional
+        Whether to save the plot. Default is False.
+    save_path : str, optional
+        Path to save the plot. Default is ".".
+    plot : bool, optional
+        Whether to plot the histogram. Default is False.
+
+    Returns
+    -------
+    list
+        List of mutation counts per allele.
+    """
     mutation_per_allele = []
     for j, x in enumerate(list(df_input["allele"].apply(lambda x: x.split(",")))):
         mutation_per_allele.append(len(x))
@@ -43,9 +63,22 @@ def mutations_per_allele(
 
 def mutations_per_allele_ins_del(df_input):
     """
-    Count the insertion and deletion events. Note that
-    some mutations have both insertion and deletion, and we are
+    Count insertion and deletion events per allele.
+
+    Note that some mutations have both insertion and deletion, and we are
     double counting here.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'allele' column.
+
+    Returns
+    -------
+    ins_per_allele : list
+        List of insertion counts per allele.
+    del_per_allele : list
+        List of deletion counts per allele.
     """
 
     ins_per_allele = []
@@ -61,11 +94,22 @@ def mutations_per_allele_ins_del(df_input):
 
 def mutations_length_per_allele_ins_del(df_input):
     """
-    Count the insertion and deletion length. Note that
-    some mutations have both insertion and deletion, and we are
-    double counting here.
+    Count insertion and deletion lengths per allele.
 
-    Note that it does not account for the UMI_count
+    Note that some mutations have both insertion and deletion, and we are
+    double counting here. Also does not account for the UMI_count.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'allele' column.
+
+    Returns
+    -------
+    ins_per_allele : list
+        List of insertion length lists per allele.
+    del_per_allele : list
+        List of deletion length lists per allele.
     """
 
     ins_per_allele = []
@@ -91,7 +135,17 @@ def mutations_length_per_allele_ins_del(df_input):
 
 def mutations_deletion_statistics(df_input):
     """
-    Record initial and final deletion position and the corresponding mutant
+    Record deletion positions and corresponding mutations.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'allele' column.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with deletion length, initial position, end position, and mutation.
     """
 
     del_per_allele = []
@@ -130,8 +184,23 @@ def mutations_deletion_statistics(df_input):
 
 def mutation_frequency(df_input, save=False, save_path=".", plot=True):
     """
-    df_Input: should ahve 'allele' and 'UMI_count'
-    df_mutation_ne: should have 'mutation' and 'UMI_count'
+    Calculate mutation frequency across alleles.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        DataFrame with 'allele' and 'UMI_count' columns.
+    save : bool, optional
+        Whether to save the plot. Default is False.
+    save_path : str, optional
+        Path to save the plot. Default is ".".
+    plot : bool, optional
+        Whether to plot the frequency distribution. Default is True.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with mutation frequencies.
     """
     mut_list = []
     UMI_count = []
@@ -158,12 +227,40 @@ def mutation_frequency(df_input, save=False, save_path=".", plot=True):
 
 
 def effective_allele_number(UMI_counts):
+    """
+    Calculate effective allele number using Shannon entropy.
+
+    Parameters
+    ----------
+    UMI_counts : array-like
+        Array of UMI counts per allele.
+
+    Returns
+    -------
+    float
+        Effective allele number (2^entropy).
+    """
     x = np.array(UMI_counts) / np.sum(UMI_counts)
     entropy = -np.sum(np.log2(x) * x)
     return 2**entropy
 
 
 def effective_allele_over_cell_fraction(df_input, editing_efficiency: float = None):
+    """
+    Calculate effective allele number as a function of cell fraction.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'UMI_count' and 'allele' columns.
+    editing_efficiency : float, optional
+        Editing efficiency for null allele correction.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with 'cell_fraction' and 'effective_allele_N' columns.
+    """
 
     if editing_efficiency is not None:
         UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
@@ -226,7 +323,16 @@ def generate_FrequencyCounts(df_raw, save_dir=None):
 
 def subsample_allele_frequency_count(df_input, sp_fraction, out_dir):
     """
-    df_input: pd object from FrequencyCounts.csv
+    Subsample allele frequency counts by a given fraction.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        DataFrame from FrequencyCounts.csv with 'Frequency' and 'Count' columns.
+    sp_fraction : float
+        Subsampling fraction.
+    out_dir : str
+        Output directory for results.
     """
 
     allele_frequency = []
@@ -270,8 +376,25 @@ def subsample_allele_freq_histogram(
     df, sample_key="sample_key", sample_fraction=0.1, plot=True
 ):
     """
-    Sub-sample a data frame according to the allele frequency.
-    df should be the allele dataframe with corresponding UMI_count information
+    Sub-sample a dataframe according to allele frequency.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Allele dataframe with 'UMI_count' column.
+    sample_key : str, optional
+        Key for sample identification. Default is "sample_key".
+    sample_fraction : float, optional
+        Fraction to subsample. Default is 0.1.
+    plot : bool, optional
+        Whether to plot the result. Default is True.
+
+    Returns
+    -------
+    df_new : pd.DataFrame
+        Subsampled dataframe.
+    singleton_ratio : float
+        Ratio of singleton alleles.
     """
 
     tot_UMI = df["UMI_count"].sum()
@@ -305,7 +428,23 @@ def subsample_allele_freq_histogram(
 
 def subsample_singleton_fraction(df, sample_key, sample_fraction_array, plot=True):
     """
-    Check the effect of sub-sampling on singleton fraction
+    Check the effect of sub-sampling on singleton fraction.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with 'UMI_count' column.
+    sample_key : str
+        Key for sample identification.
+    sample_fraction_array : array-like
+        Array of sample fractions to test.
+    plot : bool, optional
+        Whether to plot results. Default is True.
+
+    Returns
+    -------
+    dict
+        Dictionary with 'singleton_fraction' and 'allele_fraction' arrays.
     """
 
     singleton_ratio_orig = np.sum(df["UMI_count"] == 1) / len(df)
@@ -352,10 +491,19 @@ def query_allele_frequencies(df_reference, df_target):
 
 def correct_null_allele_frequency(df_input, editing_efficiency=0.3):
     """
-    Correct the allele frequency of un-edited alleles based on known
-    editing efficiency.
+    Correct allele frequency of un-edited alleles based on editing efficiency.
 
-    This is used as our Cas9 mouse has higher than expected editing efficiency
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Input DataFrame with 'UMI_count' and 'allele' columns.
+    editing_efficiency : float, optional
+        Known editing efficiency. Default is 0.3.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with corrected UMI counts for null alleles.
     """
     UMI_count_temp = np.array(df_input["UMI_count"]).astype(float)
     null_index = np.nonzero(np.array(df_input["allele"] == "[]"))[0][0]
@@ -379,8 +527,27 @@ def check_allele_frequency_prediction(
     norm_factor=None,
 ):
     """
-    Based on the observed mutation frequency, estimate the
-    observed allele frequency
+    Predict allele frequency based on observed mutation frequency.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with 'allele' and 'UMI_count' columns.
+    UMI_cutoff : int, optional
+        Minimum UMI count threshold. Default is 30.
+    mutation_N_cutoff : int, optional
+        Minimum mutation number threshold. Default is 1.
+    markersize : int, optional
+        Scatter plot marker size. Default is 25.
+    df_mutation : pd.DataFrame, optional
+        Mutation frequency DataFrame. If None, computed from df.
+    norm_factor : float, optional
+        Normalization factor. If None, computed from df_mutation.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with predicted frequencies compared to observed.
     """
     if df_mutation is None:
         df_mutation = mutation_frequency(df, plot=False)
@@ -429,9 +596,28 @@ def tree_reconstruction_accuracy(
     parent_map, node_mapping, origin_score, weight_factor=1, plot=False
 ):
     """
-    origin_score:
-        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name.
-        We recommend to symmetric value like -1 and 1, instead of 0 and 1. Otherwise, our weighting scheme is not working
+    Calculate tree reconstruction accuracy based on node score correlations.
+
+    Parameters
+    ----------
+    parent_map : dict
+        Dictionary mapping child nodes to parent nodes.
+    node_mapping : dict
+        Dictionary mapping internal nodes to leaf node values.
+    origin_score : dict
+        Dictionary mapping leaf nodes to scores. Keys are derived from letters
+        before '-' of node names. Recommended to use symmetric values like -1 and 1.
+    weight_factor : float, optional
+        Weighting factor for score decay. Default is 1.
+    plot : bool, optional
+        Whether to plot the score pairs. Default is False.
+
+    Returns
+    -------
+    corr : float
+        Correlation coefficient between score pairs.
+    score_pairs_flatten : list
+        Flattened list of score pairs.
     """
 
     node_score = {}
@@ -471,9 +657,19 @@ def tree_reconstruction_accuracy(
 
 def get_fate_count_coupling(X_clone):
     """
-    X_clone:
-        should be a coarse-grained X_clone: cell_type by clones
-        Numpy array
+    Calculate fate count coupling matrix.
+
+    Parameters
+    ----------
+    X_clone : ndarray
+        Coarse-grained clone matrix of shape (cell_type, clones).
+
+    Returns
+    -------
+    X_count : ndarray
+        Raw count coupling matrix.
+    norm_X_count : ndarray
+        Normalized coupling matrix.
     """
     fate_N = X_clone.shape[0]
     X_count = np.zeros((fate_N, fate_N))
@@ -491,11 +687,26 @@ def evaluate_coupling_matrix(
     coupling: np.array, fate_names: list, origin_score: dict, decay_factor=1, plot=False
 ):
     """
-    This is designed when we know a dictionary that maps a fate_name to a score.
+    Evaluate coupling matrix using origin scores.
 
-    origin_score:
-        A dictionary to map leaf nodes to a value. The key is taken from the letters before '-' of a node name.
-        We recommend to symmetric value like -1 and 1, instead of 0 and 1. Otherwise, our weighting scheme is not working
+    Parameters
+    ----------
+    coupling : np.array
+        Coupling matrix.
+    fate_names : list
+        List of fate names.
+    origin_score : dict
+        Dictionary mapping leaf nodes to values. Keys are derived from letters
+        before '-' of node names. Recommended to use symmetric values like -1 and 1.
+    decay_factor : float, optional
+        Decay factor for weight function. Default is 1.
+    plot : bool, optional
+        Whether to plot the coupling scores. Default is False.
+
+    Returns
+    -------
+    map_score : ndarray
+        Computed coupling scores for each fate.
     """
 
     size = len(fate_names)
@@ -633,8 +844,21 @@ def conditional_heatmap(
 
 def generate_adata_from_X_clone(X_clone, state_info=None, time_info=None):
     """
-    Convert X_clone matrix to adata, and also add it to adata.obsm['X_clone'].
-    You can run cospar on it directly.
+    Convert X_clone matrix to AnnData object for use with cospar.
+
+    Parameters
+    ----------
+    X_clone : ndarray
+        Clone matrix to convert.
+    state_info : array-like, optional
+        State information for each cell.
+    time_info : array-like, optional
+        Time information for each cell.
+
+    Returns
+    -------
+    adata : scanpy.AnnData
+        AnnData object with X_clone stored in obsm.
     """
 
     adata_orig = sc.AnnData(X_clone)
@@ -656,8 +880,21 @@ def generate_adata_from_X_clone(X_clone, state_info=None, time_info=None):
 
 def generate_adata_sample_by_allele(df_data, count_value_key="UMI_count", use_UMI=True):
     """
-    Take input from CARLIN output, like from `load_allele_info` or `extract_CARLIN_info`
-    and generate an sample-by-allele adata object
+    Generate sample-by-allele AnnData from CARLIN output.
+
+    Parameters
+    ----------
+    df_data : pd.DataFrame
+        Data from `load_allele_info` or `extract_CARLIN_info` with 'sample' and 'allele' columns.
+    count_value_key : str, optional
+        Column name for count values. Default is "UMI_count".
+    use_UMI : bool, optional
+        Whether to use UMI counts. Default is True.
+
+    Returns
+    -------
+    adata_orig : scanpy.AnnData
+        AnnData object with samples as rows and alleles as columns.
     """
     all_mutation = np.array(list(set(df_data["allele"])))
     all_cells = np.array(list(set(df_data["sample"])))
@@ -692,8 +929,21 @@ def generate_adata_cell_by_allele(
     df_sc_CARLIN, min_clone_size=3, clone_id_key="clone_id"
 ):
     """
-    from df_sc_CARLIN, generated by  `CARLIN.generate_sc_CARLIN_from_CARLIN_output`,
-    generate cell-by-clone adata
+    Generate cell-by-clone AnnData from single-cell CARLIN data.
+
+    Parameters
+    ----------
+    df_sc_CARLIN : pd.DataFrame
+        DataFrame from `CARLIN.generate_sc_CARLIN_from_CARLIN_output`.
+    min_clone_size : int, optional
+        Minimum clone size to include. Default is 3.
+    clone_id_key : str, optional
+        Column name for clone ID. Default is "clone_id".
+
+    Returns
+    -------
+    adata : scanpy.AnnData
+        AnnData object with cells as rows and clones as columns.
     """
     X_clone, ref_clone_id, ref_cell_id = cs.hf.get_X_clone_with_reference_ordering(
         df_sc_CARLIN["RNA_id"], df_sc_CARLIN[clone_id_key]
@@ -721,8 +971,23 @@ def generate_adata_allele_by_mutation(
     df_data, use_np_array=False, count_value_key="UMI_count", use_UMI=True
 ):
     """
-    Take input from CARLIN output, like from `load_allele_info` or `extract_CARLIN_info`
-    and generate an allele-by-mutation adata object
+    Generate allele-by-mutation AnnData from CARLIN output.
+
+    Parameters
+    ----------
+    df_data : pd.DataFrame
+        Data from `load_allele_info` or `extract_CARLIN_info`.
+    use_np_array : bool, optional
+        Use numpy array instead of sparse matrix. Default is False.
+    count_value_key : str, optional
+        Column name for count values. Default is "UMI_count".
+    use_UMI : bool, optional
+        Whether to use UMI counts. Default is True.
+
+    Returns
+    -------
+    adata_orig : scanpy.AnnData
+        AnnData object with alleles as rows and mutations as columns.
     """
     all_mutation = []
     for xx in df_data["allele"]:
@@ -819,16 +1084,26 @@ def keep_informative_cell_and_clones(
 
 def generate_clonal_fate_table(df_allele, thresh=0.2):
     """
-    Convert df_allele table to a clone-fate matrix, also with an annotated fate outcome for each
-    allele
+    Convert allele table to clone-fate matrix with annotated fate outcomes.
 
-    We perform normalization for each clone across all fates. Note that the clonal data might have
-    cell-type-size normalized using the cell number information from the bulk data.
+    Performs normalization for each clone across all fates. The clonal data might have
+    cell-type-size normalized using cell number information from bulk data.
 
-    We use the relative threshld `thresh` to determine the fate outcome of a given clone,
-    but we also return the raw fate matrix.
+    Uses relative threshold `thresh` to determine the fate outcome of a clone.
 
-    Return clonal fate table, and clonal fate matrix.
+    Parameters
+    ----------
+    df_allele : pd.DataFrame
+        DataFrame with allele and clone information.
+    thresh : float, optional
+        Threshold for fate assignment. Default is 0.2.
+
+    Returns
+    -------
+    df_allele_fate : pd.DataFrame
+        Clone fate assignments with fate, fate_N, fate_mouse_N, fate_mouse columns.
+    df_fate_matrix : pd.DataFrame
+        Raw clonal fate matrix (clone x fate).
     """
 
     adata = generate_adata_sample_by_allele(df_allele)

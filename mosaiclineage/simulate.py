@@ -14,8 +14,26 @@ rng = np.random.default_rng()
 def power_law_from_double_exp(
     a=np.log(2), b=np.log(2), insertion_rate=0.5, generation=12, sp_ratio=1
 ):
-    """ "
-    Simulate power law distribution from a double exponential model
+    """
+    Simulate power law distribution from a double exponential model.
+
+    Parameters
+    ----------
+    a : float, optional
+        Growth rate parameter. Default is np.log(2).
+    b : float, optional
+        Decay rate parameter. Default is np.log(2).
+    insertion_rate : float, optional
+        Rate of insertion events. Default is 0.5.
+    generation : int, optional
+        Number of generations to simulate. Default is 12.
+    sp_ratio : float, optional
+        Survival probability ratio. Default is 1.
+
+    Returns
+    -------
+    clone_size_actual_sp : ndarray
+        Array of actual clone sizes after insertion events.
     """
     clone_size_ideal = []
     generation_all = []
@@ -54,22 +72,25 @@ def generate_synthetic_alleles(
     random_seed=123,
 ):
     """
+    Generate synthetic alleles by sampling mutations from real allele data.
+
     Parameters
     ----------
-    df_allele:
-        pandas dataframe for allele count
-    target_sample_N:
-        target sequence number to sample
-    max_mutation_N:
-        Maximum number of mutations in a synthetic allele. This is usefual because if the mutation_N is too big,
-        like 10, then it is really hard to find 5 mutations that would satisfy the constraints of an valid allele.
-    random_seed:
-        random seed of the generation process. Using the same seed, the result is deterministic.
+    df_allele : pd.DataFrame
+        Dataframe containing allele information with 'allele' and 'UMI_count' columns.
+    target_sample_N : int, optional
+        Target number of synthetic alleles to generate. Default is 10**4.
+    max_mutation_N : int, optional
+        Maximum number of mutations per synthetic allele. Default is 5.
+        This is useful because if mutation_N is too large (e.g., 10), it becomes
+        difficult to find mutations that satisfy the constraints of a valid allele.
+    random_seed : int, optional
+        Random seed for reproducibility. Default is 123.
 
     Returns
     -------
-    df_synthesis:
-        pandas dataframe for synthetic allele count
+    df_synthesis : pd.DataFrame
+        Dataframe containing synthetic alleles with 'allele', 'UMI_count', and 'Predicted_frequency' columns.
     """
 
     np.random.seed(random_seed)

@@ -29,7 +29,19 @@ rcParams["legend.handlelength"] = 1.5
 
 def remove_samples(df, removed_sample=None):
     """
-    remove some samples in a dataframe
+    Remove specified samples from a dataframe.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with 'sample' column.
+    removed_sample : list, optional
+        List of sample names to remove.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with specified samples removed.
     """
 
     if removed_sample is not None:
@@ -47,14 +59,34 @@ def mutation_statistics_box_plot(
     y_labels=[
         "Average deletion length",
         "Average insertion length",
-        "(Ins. events)/(del. events)",  #: per UMI
+        "(Ins. events)/(del. events)",
     ],
     figure_dir="figure",
     figsize=(3, 4),
     rotation=45,
 ):
     """
-    df_noMerge: a
+    Create box plots of mutation statistics.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with mutation statistics.
+    sample_key : str
+        Sample key for organizing output.
+    removed_sample : list, optional
+        Samples to remove. Default includes 'merge_all'.
+    keys : list, optional
+        Columns to plot. Default is ["ave_del_len", "ave_insert_len",
+        "ins_del_ratio_ratio_by_eventful_UMI"].
+    y_labels : list, optional
+        Labels for y-axis.
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
+    figsize : tuple, optional
+        Figure size. Default is (3, 4).
+    rotation : int, optional
+        Rotation angle for x-ticks. Default is 45.
     """
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
@@ -95,11 +127,22 @@ def mutation_statistics_distribution_per_allele(
     figure_dir="figure",
 ):
     """
-    Compare mutation statistics per allele between two data source
+    Compare mutation statistics per allele between two data sources.
 
-    df_LL: allele count dataframe from Cas9-TdT mouse
-    df_SB: allele count dataframe from Cas9 mouse
-    sample_key: for making a separate folder and save the data
+    Parameters
+    ----------
+    df_LL : pd.DataFrame
+        Allele count dataframe from Cas9-TdT mouse.
+    df_SB : pd.DataFrame
+        Allele count dataframe from Cas9 mouse.
+    sample_key : str
+        Sample key for organizing output.
+    label_1 : str, optional
+        Label for first dataset. Default is "CARLIN".
+    label_2 : str, optional
+        Label for second dataset. Default is "ATCG-v1".
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
     """
     os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
 
@@ -362,10 +405,18 @@ def mutation_statistics_distribution_per_allele_single_input(
     figure_dir="figure",
 ):
     """
-    Check mutation statistics per allele from a single data source
+    Plot mutation statistics per allele from a single data source.
 
-    df_SB: allele count dataframe from Cas9 mouse
-    sample_key: for making a separate folder and save the data
+    Parameters
+    ----------
+    df_SB : pd.DataFrame
+        Allele count dataframe from Cas9 mouse.
+    sample_key : str
+        Sample key for organizing output.
+    label : str, optional
+        Label for the dataset. Default is "CARLIN".
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
     """
     os.makedirs(f"{figure_dir}/{sample_key}", exist_ok=True)
 
@@ -576,7 +627,18 @@ def mutation_statistics_distribution_per_allele_single_input(
 
 def compute_mutation_statistics_distribution_per_allele(df_input):
     """
-    Check mutation statistics per allele from a single data source
+    Compute mutation statistics per allele from a single data source.
+
+    Parameters
+    ----------
+    df_input : pd.DataFrame
+        Allele dataframe with UMI_count information.
+
+    Returns
+    -------
+    OUTPUT : dict
+        Dictionary containing computed statistics arrays for mutation event number,
+        insertion/deletion events, and lengths.
     """
     OUTPUT = {}
 
@@ -645,11 +707,22 @@ def plot_mutation_statistics_distribution_per_allele(
     legend=None,
 ):
     """
-    Compare mutation statistics per allele between two data source
+    Plot mutation statistics per allele from multiple data sources.
 
-    df_LL: allele count dataframe from Cas9-TdT mouse
-    df_SB: allele count dataframe from Cas9 mouse
-    sample_key: for making a separate folder and save the data
+    Parameters
+    ----------
+    OUTPUT_list : list
+        List of OUTPUT dictionaries from compute_mutation_statistics_distribution_per_allele.
+    label_list : list
+        List of labels for each dataset.
+    sample_key : str
+        Sample key for organizing output.
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
+    palette : list, optional
+        Color palette for plotting.
+    legend : bool, optional
+        Whether to show legend.
     """
     if len(OUTPUT_list) != len(label_list):
         raise ValueError("OUTPUT_list length does not match label_list")
@@ -1174,7 +1247,16 @@ def insertion_del_freq_histogram(
     figure_dir="figure",
 ):
     """
-    This is to test whether insertion contributes to more rare alleles than deletion
+    Test whether insertion contributes to more rare alleles than deletion.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with allele information.
+    sample_key : str
+        Sample key for organizing output.
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
     """
 
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
@@ -1302,11 +1384,18 @@ def three_locus_comparison_plots(
     figure_dir="figure",
 ):
     """
-    Comparing CC,TC,RC profiling, for both QC, and
-    evaluating the allele diversity in each locus.
+    Compare CC, TC, RC profiling for QC and allele diversity evaluation.
 
-    QC_metric and QC_x_label has one-to-one correspondence
-    performance_metric and performance_x_label has one-to-one correspondence
+    Parameters
+    ----------
+    df_all : pd.DataFrame
+        Combined DataFrame with results from all loci.
+    sample_key : str
+        Sample identifier for organizing output.
+    tag_name : str, optional
+        Name of the tag. Default is "tag".
+    figure_dir : str, optional
+        Directory to save figures. Default is "figure".
     """
     os.makedirs(f"{figure_dir}/" + sample_key, exist_ok=True)
 
@@ -1442,9 +1531,54 @@ def analyze_cell_coupling_core(
     vmax=None,
 ):
     """
-    Given adata, analyze cell coupling in full.
+    Analyze cell coupling from AnnData object.
 
-    ncluded_fates_mode: {'only','until'}
+    Parameters
+    ----------
+    adata_orig : scanpy.AnnData
+        Input AnnData object with clonal data.
+    selected_fates : list, optional
+        List of selected fate names.
+    short_names : list, optional
+        Short names for plotting.
+    remove_single_lineage_clone : bool, optional
+        Whether to remove single lineage clones. Default is False.
+    plot_sample_number : bool, optional
+        Whether to plot sample number histogram. Default is True.
+    plot_barcodes_binary : bool, optional
+        Whether to plot binary barcode heatmap. Default is True.
+    plot_barcodes_normalize : bool, optional
+        Whether to plot normalized barcode heatmap. Default is True.
+    plot_restricted : bool, optional
+        Whether to plot restricted heatmaps. Default is True.
+    plot_cell_count : bool, optional
+        Whether to plot cell count. Default is True.
+    plot_hierarchy : bool, optional
+        Whether to plot hierarchy. Default is True.
+    restricted_normalize : bool, optional
+        Whether to normalize restricted plots. Default is True.
+    plot_Jaccard : bool, optional
+        Whether to plot Jaccard similarity. Default is True.
+    plot_pie : bool, optional
+        Whether to plot pie chart. Default is False.
+    plot_correlation : bool, optional
+        Whether to plot correlation. Default is True.
+    order_map : bool, optional
+        Whether to order map. Default is False.
+    included_fates_N : list, optional
+        List of fate indices to include. Default is [0].
+    included_fates_mode : str, optional
+        Mode for including fates: 'only' or 'until'. Default is "only".
+    time_info : array-like, optional
+        Time information for cells.
+    print_matrix : bool, optional
+        Whether to print matrix. Default is False.
+    figure_path : str, optional
+        Path to save figures. Default is "figure".
+    data_des : str, optional
+        Description for data. Default is "".
+    vmax : float, optional
+        Maximum value for colormap.
     """
 
     # a temporary fix for time_info
